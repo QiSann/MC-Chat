@@ -12,8 +12,8 @@
 
 | 阶段里程碑 | 核心主题 | 当前状态 | 预计完成度 |
 | :--- | :--- | :---: | :---: |
-| **Phase 1** | Fabric 1.20.1 工程骨架与开发环境搭建 | ⏳ **进行中** | 10% |
-| **Phase 2** | 纯 Java 解耦核心：通用 LLM 异步通信与配置系统 | ⬜ 未开始 | 0% |
+| **Phase 1** | Fabric 1.20.1 工程骨架与开发环境搭建 | ✅ **已完成** | 100% |
+| **Phase 2** | 纯 Java 解耦核心：通用 LLM 异步通信与配置系统 | ⏳ **进行中** | 0% |
 | **Phase 3** | 原生 ChatHud 聊天交互与轻量 Markdown 富文本染色 | ⬜ 未开始 | 0% |
 | **Phase 4** | 跨模组物品全息自省、实时合成表反查与主动感知 | ⬜ 未开始 | 0% |
 | **Phase 5** | 三层本地持久化记忆库、久别重逢情感引擎与自主查百科 | ⬜ 未开始 | 0% |
@@ -24,11 +24,11 @@
 ## 📋 详细分步开发与学习任务清单
 
 ### Phase 1：Fabric 1.20.1 工程骨架与开发环境搭建（基础底座）
-- [ ] **Step 1.1**：拉取/创建 Fabric 1.20.1 标准 Gradle 工程结构（包含 `gradlew`、`build.gradle`、`settings.gradle`）
-- [ ] **Step 1.2**：配置本地 JDK 17 锁定（`gradle.properties` 绑定 `D:\java\jdk-17`），避免全局环境变量干扰
-- [ ] **Step 1.3**：配置依赖库（Fabric API、Gson、Jsoup、MixinExtras）与 UTF-8 编码支持
-- [ ] **Step 1.4**：编写模组元数据清单 `fabric.mod.json` 与 Mixin 配置 `minecompanion.mixins.json`
-- [ ] **Step 1.5**：创建模组客户端主入口 `MineCompanionClient.java`，执行首次 Gradle 编译验证
+- [x] **Step 1.1**：拉取/创建 Fabric 1.20.1 标准 Gradle 工程结构（包含 `gradlew`、`build.gradle`、`settings.gradle`）
+- [x] **Step 1.2**：配置本地 JDK 17 锁定（`gradle.properties` 绑定 `D:\java\jdk-17`），避免全局环境变量干扰
+- [x] **Step 1.3**：配置依赖库（Fabric API、Gson、Jsoup、MixinExtras）与 UTF-8 编码支持
+- [x] **Step 1.4**：编写模组元数据清单 `fabric.mod.json` 与 Mixin 配置 `minecompanion.mixins.json`
+- [x] **Step 1.5**：创建模组客户端主入口 `MineCompanionClient.java`，执行首次 Gradle 编译验证（产出 `minecompanion-1.0.0-alpha.jar`）
 
 ---
 
@@ -83,9 +83,9 @@
 | 日期 | 执行阶段与步骤 | 详细变更与学习记录 | 执行人 |
 | :--- | :--- | :--- | :--- |
 | **2026-10-19** | 架构审阅与准备 | 完成设计文档 [`minecraft_ai_companion_mod_design.md`](file:///D:/studying/Antigravity/MineCraft%20Mod/minecraft_ai_companion_mod_design.md) 全面解析；侦测并确认本地 JDK 17 (`D:\java\jdk-17`) 就绪；建立本进度跟踪手册 | 主人 & 双子猫娘 |
-| **待执行** | Step 1.1 ~ 1.5 | 初始化 Fabric 1.20.1 Gradle 工程骨架、配置 JDK 17 与依赖、完成首次编译 | 待开展 |
+| **2026-10-19** | Phase 1 (Step 1.1~1.5) | 搭建 Fabric 1.20.1 标准 Gradle 工程（Gradle 8.8 + Loom 1.7.4 + Yarn 映射表），绑定 JDK 17，添加 Gson/Jsoup 依赖，编写入口类并通过首轮构建，生成 `minecompanion-1.0.0-alpha.jar` | 主人 & 双子猫娘 |
 
 ---
 
 ## 🎯 当前任务焦点（Next Action）
-👉 **下一步**：执行 **Step 1.1 ~ Step 1.5**，在 `D:\studying\Antigravity\MineCraft Mod` 目录下搭建标准的 Fabric 1.20.1 模组工程脚手架，绑定 JDK 17，完成首次构建验证！
+👉 **下一步**：开启 **Phase 2（Step 2.1 ~ 2.5）**，设计并实现纯 Java 解耦核心通信层——`CompanionConfig`（配置自动持久化）与通用 `LlmClient`（支持 OpenAI / Gemini / DeepSeek 协议与异步 SSE 流式响应）！

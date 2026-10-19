@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "minecompanion",
+  "version": "${version}",
+  "name": "MineCompanion AI",
+  "description": "Minecraft 1.20.1 智能同游伙伴 Mod，具备跨模组自省、长期记忆、现实时间情感共鸣与按需多模态视觉感知。",
+  "authors": [
+    "QiSann"
+  ],
+  "contact": {
+    "homepage": "https://github.com/QiSann/MC-Chat",
+    "sources": "https://github.com/QiSann/MC-Chat"
+  },
+  "license": "MIT",
+  "icon": "assets/minecompanion/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.minecompanion.MineCompanionMod"
+    ],
+    "client": [
+      "com.minecompanion.client.MineCompanionClient"
+    ]
+  },
+  "mixins": [
+    "minecompanion.mixins.json",
+    {
+      "config": "minecompanion.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=17",
+    "fabric-api": "*"
+  }
+}
