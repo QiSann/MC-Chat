@@ -3,12 +3,14 @@ package com.minecompanion.client;
 import com.minecompanion.MineCompanionMod;
 import com.minecompanion.core.config.CompanionConfig;
 import com.minecompanion.core.llm.LlmClient;
+import com.minecompanion.core.router.PerceptionRouter;
 import com.minecompanion.mc.chat.ChatColorFormatter;
 import com.minecompanion.mc.modcompat.ModIntrospector;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
+import net.fabricmc.fabric.api.client.message.v1.ClientSendMessageEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
@@ -19,7 +21,7 @@ import java.io.File;
 
 /**
  * MineCompanion AI 模组客户端入口类
- * 负责注册客户端指令 /ai、整合跨模组物品全息自省、并异步安全推送到 ChatHud
+ * 负责客户端聊天监听、免指令自然语言唤醒、意图路由与异步消息渲染
  */
 public class MineCompanionClient implements ClientModInitializer {
     public static final Logger CLIENT_LOGGER = LoggerFactory.getLogger(MineCompanionMod.MOD_ID + "-client");
@@ -34,39 +36,44 @@ public class MineCompanionClient implements ClientModInitializer {
         configDir = new File(client.runDirectory, "config/minecompanion");
         CompanionConfig.load(configDir);
 
-        // 2. 注册客户端原生指令：/ai <消息>
+        // 2. 🌟 监听原生聊天栏输入（免 /ai 自然语言自动唤醒，支持开关）
+        ClientSendMessageEvents.CHAT.register((message) -> {
+            reloadConfigQuietly();
+            CompanionConfig config = CompanionConfig.get();
+            if (config.enableChatAutoWakeup) {
+                // 原生聊天已被游戏发到聊天栏，此处不重复打印 [你]，直接唤醒 AI
+                handleUserAiCommand(message, false);
+            }
+        });
+
+        // 3. 注册斜杠指令集（提供 /ai 以及超短的 /item, /target, /mods 简短快捷指令）
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
+            // (1) /ai <消息>
             dispatcher.register(ClientCommandManager.literal("ai")
-                .then(ClientCommandManager.literal("item")
-                    .executes(context -> {
-                        handleInspectHandItem();
-                        return 1;
-                    }))
-                .then(ClientCommandManager.literal("target")
-                    .executes(context -> {
-                        handleInspectTarget();
-                        return 1;
-                    }))
-                .then(ClientCommandManager.literal("mods")
-                    .executes(context -> {
-                        sendToChatHud("§b[小爱] §f" + ModIntrospector.getInstalledModsSummary());
-                        return 1;
-                    }))
+                .then(ClientCommandManager.literal("item").executes(c -> { handleInspectHandItem(); return 1; }))
+                .then(ClientCommandManager.literal("target").executes(c -> { handleInspectTarget(); return 1; }))
+                .then(ClientCommandManager.literal("mods").executes(c -> { handleListMods(); return 1; }))
                 .then(ClientCommandManager.argument("message", StringArgumentType.greedyString())
                     .executes(context -> {
                         String userMessage = StringArgumentType.getString(context, "message");
-                        handleUserAiCommand(userMessage);
+                        handleUserAiCommand(userMessage, true);
                         return 1;
                     }))
                 .executes(context -> {
-                    sendToChatHud("§e【AI 伙伴用法】§f在聊天栏输入：");
-                    sendToChatHud("§b/ai <话语> §7- 与伙伴自由交谈");
-                    sendToChatHud("§b/ai item   §7- 深度自省手持物品与合成表");
-                    sendToChatHud("§b/ai target §7- 深度自省准星所指方块或生物");
-                    sendToChatHud("§b/ai mods   §7- 查看当前整合包已装功能模组清单");
+                    sendToChatHud("§e【AI 伙伴快捷用法】§f直接在聊天栏打字即可与伙伴聊天！");
+                    sendToChatHud("§7也可使用极简指令：§b/item §7(手持) │ §b/target §7(注视) │ §b/mods §7(模组)");
                     return 1;
                 })
             );
+
+            // (2) 极简独立别名指令：/item
+            dispatcher.register(ClientCommandManager.literal("item").executes(c -> { handleInspectHandItem(); return 1; }));
+
+            // (3) 极简独立别名指令：/target
+            dispatcher.register(ClientCommandManager.literal("target").executes(c -> { handleInspectTarget(); return 1; }));
+
+            // (4) 极简独立别名指令：/mods
+            dispatcher.register(ClientCommandManager.literal("mods").executes(c -> { handleListMods(); return 1; }));
         });
     }
 
@@ -105,29 +112,37 @@ public class MineCompanionClient implements ClientModInitializer {
     }
 
     /**
-     * 处理玩家输入的普通 /ai 指令（自动附带手持物品与准星感知上下文）
+     * 一键列出模组清单
      */
-    private static void handleUserAiCommand(String userMessage) {
+    private static void handleListMods() {
+        sendToChatHud("§b[小爱] §f" + ModIntrospector.getInstalledModsSummary());
+    }
+
+    /**
+     * 核心处理：智能感知路由器（支持自然语言意图识别 + 显式 /ai 指令）
+     *
+     * @param printSelfEcho 是否需要在聊天框回显玩家自己的话（通过 /ai 调用时为 true；普通聊天栏直接发出的为 false）
+     */
+    private static void handleUserAiCommand(String userMessage, boolean printSelfEcho) {
         MinecraftClient client = MinecraftClient.getInstance();
 
-        // 先在聊天栏打印玩家自己说的话
-        sendToChatHud("§7[你] §f" + userMessage);
+        if (printSelfEcho) {
+            sendToChatHud("§7[你] §f" + userMessage);
+        }
         sendToChatHud("§7§o* [小爱] 正在歪着头思考中... *§r");
 
-        // 自动提取当前手持与视线焦点注入上下文
-        StringBuilder contextBuilder = new StringBuilder(userMessage);
-        if (client.player != null) {
-            ItemStack hand = client.player.getMainHandStack();
-            if (!hand.isEmpty()) {
-                contextBuilder.append("\n\n【玩家当前感知环境】\n");
-                contextBuilder.append(ModIntrospector.inspectItemStack(hand)).append("\n");
-                contextBuilder.append(ModIntrospector.inspectCrosshairTarget());
-            }
-        }
+        // 提取手持与准星数据
+        ItemStack hand = (client.player != null) ? client.player.getMainHandStack() : ItemStack.EMPTY;
+        String handCard = ModIntrospector.inspectItemStack(hand);
+        String crosshairCard = ModIntrospector.inspectCrosshairTarget();
+        String modsSummary = ModIntrospector.getInstalledModsSummary();
+
+        // 🌟 通过 PerceptionRouter 智能路由器，根据玩家说的自然语言自动组装真实游戏数据
+        String assembledPrompt = PerceptionRouter.assembleContextPrompt(userMessage, handCard, crosshairCard, modsSummary);
 
         reloadConfigQuietly();
         // 异步向大模型发送请求（不阻塞游戏渲染）
-        LlmClient.chatSimpleAsync(contextBuilder.toString()).thenAccept(reply -> {
+        LlmClient.chatSimpleAsync(assembledPrompt).thenAccept(reply -> {
             String formattedReply = ChatColorFormatter.formatAssistantReply(reply);
             sendToChatHud(formattedReply);
         });
