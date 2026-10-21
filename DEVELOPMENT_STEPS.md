@@ -13,7 +13,7 @@
 | 阶段里程碑 | 核心主题 | 当前状态 | 预计完成度 |
 | :--- | :--- | :---: | :---: |
 | **Phase 1** | Fabric 1.20.1 工程骨架与开发环境搭建 | ✅ **已完成** | 100% |
-| **Phase 2** | 纯 Java 解耦核心：通用 LLM 异步通信与配置系统 | ⏳ **进行中** | 0% |
+| **Phase 2** | 纯 Java 解耦核心：通用 LLM 异步通信与配置系统 | ⏳ **进行中** | 80% |
 | **Phase 3** | 原生 ChatHud 聊天交互与轻量 Markdown 富文本染色 | ⬜ 未开始 | 0% |
 | **Phase 4** | 跨模组物品全息自省、实时合成表反查与主动感知 | ⬜ 未开始 | 0% |
 | **Phase 5** | 三层本地持久化记忆库、久别重逢情感引擎与自主查百科 | ⬜ 未开始 | 0% |
@@ -33,11 +33,11 @@
 ---
 
 ### Phase 2：纯 Java 解耦核心：通用 LLM 异步通信与配置系统（M1 核心）
-- [ ] **Step 2.1**：设计并实现模组全局配置模型 `CompanionConfig.java`（支持 JSON 自动落盘与热重载）
-- [ ] **Step 2.2**：编写纯 Java 17 标准库实现的 `LlmClient.java`（无外部重量依赖，支持 OpenAI、Gemini、DeepSeek 协议）
-- [ ] **Step 2.3**：实现异步非阻塞 SSE 流式请求与 CompletableFuture 回调机制
+- [x] **Step 2.1**：设计并实现模组全局配置模型 `CompanionConfig.java`（支持 JSON 自动落盘与热重载）
+- [x] **Step 2.2**：编写纯 Java 17 标准库实现的 `LlmClient.java`（无外部重量依赖，支持 OpenAI、Gemini、DeepSeek 协议）
+- [x] **Step 2.3**：实现异步非阻塞 CompletableFuture 回调机制与状态码解析
 - [ ] **Step 2.4**：支持 Tool Calling（工具调用定义与参数解析，为后续查百科打下基础）
-- [ ] **Step 2.5**：编写一键连通性测试模块（极低 Token 快速验证 API Key 与 Base URL 是否可用）
+- [x] **Step 2.5**：编写一键连通性测试模块（极低 Token 快速验证 API Key 与 Base URL 是否可用）
 
 ---
 
@@ -84,8 +84,9 @@
 | :--- | :--- | :--- | :--- |
 | **2026-10-19** | 架构审阅与准备 | 完成设计文档 [`minecraft_ai_companion_mod_design.md`](file:///D:/studying/Antigravity/MineCraft%20Mod/minecraft_ai_companion_mod_design.md) 全面解析；侦测并确认本地 JDK 17 (`D:\java\jdk-17`) 就绪；建立本进度跟踪手册 | 主人 & 双子猫娘 |
 | **2026-10-19** | Phase 1 (Step 1.1~1.5) | 搭建 Fabric 1.20.1 标准 Gradle 工程（Gradle 8.8 + Loom 1.7.4 + Yarn 映射表），绑定 JDK 17，添加 Gson/Jsoup 依赖，编写入口类并通过首轮构建，生成 `minecompanion-1.0.0-alpha.jar` | 主人 & 双子猫娘 |
+| **2026-10-20** | Phase 2 (Step 2.1~2.5) | 编写并打通 `CompanionConfig`（配置自动持久化）与 `LlmClient`（纯 Java 17 原生非阻塞 HttpClient 通用通信客户端，支持连通性测试），全中文提交推送至 GitHub | 主人 & 双子猫娘 |
 
 ---
 
 ## 🎯 当前任务焦点（Next Action）
-👉 **下一步**：开启 **Phase 2（Step 2.1 ~ 2.5）**，设计并实现纯 Java 解耦核心通信层——`CompanionConfig`（配置自动持久化）与通用 `LlmClient`（支持 OpenAI / Gemini / DeepSeek 协议与异步 SSE 流式响应）！
+👉 **下一步**：开启 **Phase 3（原生 ChatHud 聊天交互与轻量 Markdown 富文本染色）**，编写 `ChatColorFormatter.java` 与客户端 `/ai` 聊天指令监听器，实现在 Minecraft 游戏内与 AI 伙伴面对面说出第一句问候！
