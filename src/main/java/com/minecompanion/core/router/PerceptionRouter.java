@@ -2,8 +2,7 @@ package com.minecompanion.core.router;
 
 /**
  * 混合感知路由器 (PerceptionRouter)
- * 负责解析玩家自然语言意图（例如“手里拿的是什么”、“装了哪些模组”、“面前是什么”），
- * 智能命中手持物品、注视目标或模组全息数据，无需硬记繁琐的斜杠指令！
+ * 负责解析玩家自然语言意图，并动态组装手持物品、注视目标、已装模组与生存态势数据
  */
 public class PerceptionRouter {
 
@@ -52,37 +51,46 @@ public class PerceptionRouter {
     }
 
     /**
-     * 根据意图自动动态组装送往大模型的提示词
+     * 根据意图自动动态组装送往大模型的提示词（融合环境与生存态势）
      */
     public static String assembleContextPrompt(
             String userMessage,
             String handItemCard,
             String crosshairCard,
-            String modsSummary) {
+            String modsSummary,
+            String stateSnapshot) {
 
         IntentType intent = classifyIntent(userMessage);
 
+        StringBuilder sb = new StringBuilder();
+        sb.append(userMessage).append("\n\n");
+        sb.append("【玩家实时生存态势】\n").append(stateSnapshot).append("\n");
+
         switch (intent) {
             case MODS_SUMMARY:
-                return userMessage + "\n\n【游戏内真实数据-已装模组】\n" + modsSummary
-                        + "\n（请以你的活泼伙伴口吻，为玩家挑重点简要介绍这个整合包的核心模组特色）";
+                sb.append("【已装模组信息】\n").append(modsSummary)
+                  .append("\n（请以你的活泼伙伴口吻，为玩家挑重点简要介绍这个整合包的核心模组特色）");
+                break;
 
             case HAND_ITEM:
-                return userMessage + "\n\n" + handItemCard
-                        + "\n（请根据上面提取的游戏内真实数据，向玩家讲解这件手持物品的名称、出处模组、用途及合成关键）";
+                sb.append(handItemCard)
+                  .append("\n（请根据上面提取的游戏内真实数据，向玩家讲解这件手持物品的名称、出处模组、用途及合成关键）");
+                break;
 
             case CROSSHAIR_TARGET:
-                return userMessage + "\n\n" + crosshairCard
-                        + "\n（请根据上面提取的视线目标数据，向玩家介绍面前的目标属于哪个模组、有什么机制或注意事项）";
+                sb.append(crosshairCard)
+                  .append("\n（请根据上面提取的视线目标数据，向玩家介绍面前的目标属于哪个模组、有什么机制或注意事项）");
+                break;
 
             case GENERAL_CHAT:
             default:
-                // 普通聊天也悄悄带上手持与视线感知，以便 AI 心领神会
-                StringBuilder sb = new StringBuilder(userMessage);
                 if (handItemCard != null && !handItemCard.contains("空手")) {
-                    sb.append("\n\n【环境感知补充】\n").append(handItemCard).append("\n").append(crosshairCard);
+                    sb.append(handItemCard).append("\n");
                 }
-                return sb.toString();
+                sb.append(crosshairCard);
+                break;
         }
+
+        return sb.toString();
     }
 }
