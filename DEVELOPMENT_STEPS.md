@@ -13,9 +13,9 @@
 | 阶段里程碑 | 核心主题 | 当前状态 | 预计完成度 |
 | :--- | :--- | :---: | :---: |
 | **Phase 1** | Fabric 1.20.1 工程骨架与开发环境搭建 | ✅ **已完成** | 100% |
-| **Phase 2** | 纯 Java 解耦核心：通用 LLM 异步通信与配置系统 | ⏳ **进行中** | 80% |
-| **Phase 3** | 原生 ChatHud 聊天交互与轻量 Markdown 富文本染色 | ⬜ 未开始 | 0% |
-| **Phase 4** | 跨模组物品全息自省、实时合成表反查与主动感知 | ⬜ 未开始 | 0% |
+| **Phase 2** | 纯 Java 解耦核心：通用 LLM 异步通信与配置系统 | ✅ **已完成** | 100% |
+| **Phase 3** | 原生 ChatHud 聊天交互与轻量 Markdown 富文本染色 | ✅ **已完成** | 100% |
+| **Phase 4** | 跨模组物品全息自省、实时合成表反查与主动感知 | ⏳ **进行中** | 0% |
 | **Phase 5** | 三层本地持久化记忆库、久别重逢情感引擎与自主查百科 | ⬜ 未开始 | 0% |
 | **Phase 6** | OpenGL Framebuffer 关键时刻视觉截图与四页签配置屏 | ⬜ 未开始 | 0% |
 
@@ -42,10 +42,10 @@
 ---
 
 ### Phase 3：原生 ChatHud 聊天交互与轻量 Markdown 富文本染色（M1 闭环）
-- [ ] **Step 3.1**：通过 Fabric Client 事件监听玩家原生聊天输入与 `/ai` 快捷指令集
-- [ ] **Step 3.2**：编写 `ChatColorFormatter.java`，将大模型回复中的 Markdown（加粗、斜体、列表、代码块）转换为 Minecraft 原生文本样式（`§b` 染色）
-- [ ] **Step 3.3**：实现主线程安全回切，将 LLM 异步响应平滑推送到客户端 `ChatHud`
-- [ ] **Step 3.4**：在游戏内完成第一句端到端对话互动测试（“你好呀主人，我是你的游戏伙伴小爱喵~”）
+- [x] **Step 3.1**：通过 Fabric Client 事件监听玩家原生聊天输入与 `/ai` 快捷指令集
+- [x] **Step 3.2**：编写 `ChatColorFormatter.java`，将大模型回复中的 Markdown（加粗、斜体、列表、代码块）转换为 Minecraft 原生文本样式（`§b` 染色）
+- [x] **Step 3.3**：实现主线程安全回切，将 LLM 异步响应平滑推送到客户端 `ChatHud`
+- [x] **Step 3.4**：在游戏内完成第一句端到端对话互动测试（“你好呀主人，我是你的游戏伙伴小爱喵~”）
 
 ---
 
@@ -86,7 +86,9 @@
 | **2026-10-19** | Phase 1 (Step 1.1~1.5) | 搭建 Fabric 1.20.1 标准 Gradle 工程（Gradle 8.8 + Loom 1.7.4 + Yarn 映射表），绑定 JDK 17，添加 Gson/Jsoup 依赖，编写入口类并通过首轮构建，生成 `minecompanion-1.0.0-alpha.jar` | 主人 & 双子猫娘 |
 | **2026-10-20** | Phase 2 (Step 2.1~2.5) | 编写并打通 `CompanionConfig`（配置自动持久化）与 `LlmClient`（纯 Java 17 原生非阻塞 HttpClient 通用通信客户端，支持连通性测试），全中文提交推送至 GitHub | 主人 & 双子猫娘 |
 
+| **2026-10-21** | Phase 3 (Step 3.1~3.4) | 实现 `ChatColorFormatter` 与客户端 `/ai` 聊天指令监听，成功在 Minecraft 1.20.1 原生单人世界中完成第一句端到端对话互动测试（M1 阶段圆满闭环） | 主人 & 双子猫娘 |
+
 ---
 
 ## 🎯 当前任务焦点（Next Action）
-👉 **下一步**：开启 **Phase 3（原生 ChatHud 聊天交互与轻量 Markdown 富文本染色）**，编写 `ChatColorFormatter.java` 与客户端 `/ai` 聊天指令监听器，实现在 Minecraft 游戏内与 AI 伙伴面对面说出第一句问候！
+👉 **下一步**：开启 **Phase 4：跨模组物品全息自省、实时合成表反查与主动感知（M2 核心）**，编写 `ModIntrospector.java`，让 AI 能够一眼认出玩家手持/注视/GUI 里的第三方模组物品、展开 Tooltip 说明并实时反查魔改合成配方！
