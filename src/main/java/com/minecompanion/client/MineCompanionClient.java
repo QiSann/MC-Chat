@@ -18,6 +18,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * MineCompanion AI 模组客户端入口类
@@ -41,7 +43,7 @@ public class MineCompanionClient implements ClientModInitializer {
             reloadConfigQuietly();
             CompanionConfig config = CompanionConfig.get();
             if (config.enableChatAutoWakeup) {
-                // 原生聊天已被游戏发到聊天栏，此处不重复打印 [你]，直接唤醒 AI
+                // 原生聊天由服务器广播回显，此处延迟展示思考提示，确保时序正确
                 handleUserAiCommand(message, false);
             }
         });
@@ -128,8 +130,14 @@ public class MineCompanionClient implements ClientModInitializer {
 
         if (printSelfEcho) {
             sendToChatHud("§7[你] §f" + userMessage);
+            sendToChatHud("§7§o* [小爱] 正在歪着头思考中... *§r");
+        } else {
+            // 🌟 解决网络时序颠倒：普通聊天发送后，服务器需要约 10~30ms 广播玩家的 <玩家名> 消息。
+            // 此处微延时 100ms 弹出思考状态，确保永远排在玩家自身消息的下方！
+            CompletableFuture.runAsync(() -> {
+                sendToChatHud("§7§o* [小爱] 正在歪着头思考中... *§r");
+            }, CompletableFuture.delayedExecutor(100, TimeUnit.MILLISECONDS));
         }
-        sendToChatHud("§7§o* [小爱] 正在歪着头思考中... *§r");
 
         // 提取手持与准星数据
         ItemStack hand = (client.player != null) ? client.player.getMainHandStack() : ItemStack.EMPTY;
