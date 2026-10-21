@@ -54,7 +54,7 @@ public class ProactiveScheduler {
         }
 
         // ==================== 2. P2 静默闲聊触发器 (Idle Chat Timer) ====================
-        long idleThresholdMs = (long) config.idleChatMinutes * 60_000L;
+        long idleThresholdMs = (config.idleChatSeconds > 0 ? (long) config.idleChatSeconds : 90L) * 1_000L;
         long cooldownMs = (long) config.globalCooldownSeconds * 1_000L;
 
         // 如果距离上次说话已经超过设定的静默时间，且过了最小全局冷却

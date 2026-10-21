@@ -40,8 +40,8 @@ public class CompanionConfig {
     // ==================== 3. 聊天与免指令唤醒开关 (玩家新建议) ====================
     public boolean enableChatAutoWakeup = true;   // 允许普通聊天栏打字免 /ai 自动唤醒
     public boolean enableProactiveSpeech = true;  // 允许 AI 主动开口
-    public int globalCooldownSeconds = 45;
-    public int idleChatMinutes = 4;
+    public int globalCooldownSeconds = 25;        // 主动发言最小冷却时间（由 45 秒优化为 25 秒，更灵敏）
+    public int idleChatSeconds = 90;              // 静默闲聊触发时长（升级为秒级控制，由 4 分钟缩短为 90 秒，更活泼粘人）
     public boolean enableLowHealthWarning = true;
     public boolean enableReEntryGreeting = true;
 
