@@ -19,7 +19,8 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * 通用大模型异步通信客户端
- * 基于 Java 17 原生 HttpClient 实现，兼容 OpenAI / Gemini / DeepSeek 等主流服务商
+ * 基于 Java 17 原生 HttpClient 实现，兼容 OpenAI / Gemini / DeepSeek 等主流服务商，
+ * 支持多轮记忆上下文注入、双模型视觉路由 (Vision Multimodal) 以及纯文本模型平滑自动降级
  */
 public class LlmClient {
     private static final Gson GSON = new Gson();
@@ -44,7 +45,7 @@ public class LlmClient {
 
         // 1. 基础合法性校验
         if (config.apiKey == null || config.apiKey.isBlank()) {
-            return CompletableFuture.completedFuture("【提示】未配置 API Key 喵！请在配置文件中填入您的大模型密钥。");
+            return CompletableFuture.completedFuture("【提示】未配置 API Key 喵！请按 K 键打开配置中心填入您的大模型密钥。");
         }
 
         // 2. 组装 OpenAI 规范的请求体 JSON
@@ -61,9 +62,7 @@ public class LlmClient {
         }
         requestBody.add("messages", msgArray);
 
-        // 格式化 API 请求地址（自动去除多余结尾斜杠并补全 /chat/completions）
-        String base = config.baseUrl.trim().replaceAll("/+$", "");
-        String endpoint = base.endsWith("/chat/completions") ? base : base + "/chat/completions";
+        String endpoint = normalizeEndpoint(config.baseUrl);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(endpoint))
@@ -82,7 +81,7 @@ public class LlmClient {
                     if (statusCode == 200) {
                         return parseAssistantReply(body);
                     } else if (statusCode == 401) {
-                        return "【API 报错】API Key 认证失败 (401)，请检查密钥是否填写正确喵！";
+                        return "【API 报错】API Key 认证失败 (401)，请按 K 键打开配置界面检查密钥喵！";
                     } else if (statusCode == 402) {
                         return "【API 报错】账号余额不足 (402)，请前往服务商平台充值喵！";
                     } else if (statusCode == 429) {
@@ -149,6 +148,96 @@ public class LlmClient {
     }
 
     /**
+     * 多模态视觉看图请求（支持双模型路由：优先调用独立视觉模型，若当前模型为纯文本模型报错 400/422 则平滑自动降级为纯文本态势感知回答）
+     */
+    public static CompletableFuture<String> chatVisionAsync(
+            String rawUserText,
+            String assembledUserPrompt,
+            String jpegBase64,
+            String memoryContextBlock) {
+
+        if (jpegBase64 == null || jpegBase64.isBlank()) {
+            return chatWithMemoryAsync(rawUserText, assembledUserPrompt, memoryContextBlock);
+        }
+
+        CompanionConfig config = CompanionConfig.get();
+        if (config.apiKey == null || config.apiKey.isBlank()) {
+            return CompletableFuture.completedFuture("【提示】未配置 API Key 喵！请按 K 键打开配置中心填入您的大模型密钥。");
+        }
+
+        // 确定使用独立视觉模型还是主模型
+        String targetBaseUrl = (config.enableVisionModel && config.visionBaseUrl != null && !config.visionBaseUrl.isBlank())
+                ? config.visionBaseUrl : config.baseUrl;
+        String targetModel = (config.enableVisionModel && config.visionModelName != null && !config.visionModelName.isBlank())
+                ? config.visionModelName : config.modelName;
+
+        JsonObject requestBody = new JsonObject();
+        requestBody.addProperty("model", targetModel);
+        requestBody.addProperty("temperature", 0.7);
+
+        JsonArray msgArray = new JsonArray();
+
+        // 1. System Prompt + 记忆块
+        StringBuilder sysBuilder = new StringBuilder();
+        if (config.systemPrompt != null && !config.systemPrompt.isBlank()) {
+            sysBuilder.append(config.systemPrompt).append("\n\n");
+        }
+        if (memoryContextBlock != null && !memoryContextBlock.isBlank()) {
+            sysBuilder.append(memoryContextBlock);
+        }
+        if (!sysBuilder.isEmpty()) {
+            JsonObject sysMsg = new JsonObject();
+            sysMsg.addProperty("role", "system");
+            sysMsg.addProperty("content", sysBuilder.toString().trim());
+            msgArray.add(sysMsg);
+        }
+
+        // 2. 多模态 User 消息 (Text + Image Base64)
+        JsonObject userMsg = new JsonObject();
+        userMsg.addProperty("role", "user");
+        JsonArray contentArr = new JsonArray();
+
+        JsonObject textPart = new JsonObject();
+        textPart.addProperty("type", "text");
+        textPart.addProperty("text", assembledUserPrompt);
+        contentArr.add(textPart);
+
+        JsonObject imagePart = new JsonObject();
+        imagePart.addProperty("type", "image_url");
+        JsonObject imageUrlObj = new JsonObject();
+        imageUrlObj.addProperty("url", "data:image/jpeg;base64," + jpegBase64);
+        imagePart.add("image_url", imageUrlObj);
+        contentArr.add(imagePart);
+
+        userMsg.add("content", contentArr);
+        msgArray.add(userMsg);
+        requestBody.add("messages", msgArray);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(normalizeEndpoint(targetBaseUrl)))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + config.apiKey.trim())
+                .timeout(Duration.ofSeconds(35))
+                .POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(requestBody), StandardCharsets.UTF_8))
+                .build();
+
+        return HTTP_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+                .thenCompose(response -> {
+                    if (response.statusCode() == 200) {
+                        String reply = parseAssistantReply(response.body());
+                        LocalMemoryManager memMgr = LocalMemoryManager.getCurrent();
+                        if (memMgr != null && rawUserText != null && !rawUserText.isBlank() && !reply.startsWith("【")) {
+                            memMgr.recordChatTurn(rawUserText, reply);
+                        }
+                        return CompletableFuture.completedFuture(reply);
+                    }
+                    // 若当前配置的是纯文本模型（如 deepseek-chat 不支持 image_url 返回 400/422），平滑降级为纯文本全息态势感知
+                    return chatWithMemoryAsync(rawUserText, assembledUserPrompt, memoryContextBlock);
+                })
+                .exceptionallyCompose(ex -> chatWithMemoryAsync(rawUserText, assembledUserPrompt, memoryContextBlock));
+    }
+
+    /**
      * 一键测试连通性（发送 5 个 Token 的极简请求）
      */
     public static CompletableFuture<String> testConnectionAsync() {
@@ -156,6 +245,11 @@ public class LlmClient {
                 new ChatMessage("user", "Hello! 请回复'OK'")
         );
         return chatAsync(testMsgs);
+    }
+
+    private static String normalizeEndpoint(String baseUrl) {
+        String base = (baseUrl == null ? "https://api.openai.com/v1" : baseUrl).trim().replaceAll("/+$", "");
+        return base.endsWith("/chat/completions") ? base : base + "/chat/completions";
     }
 
     /**

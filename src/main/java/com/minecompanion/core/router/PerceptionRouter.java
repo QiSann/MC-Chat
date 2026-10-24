@@ -2,7 +2,7 @@ package com.minecompanion.core.router;
 
 /**
  * 混合感知路由器 (PerceptionRouter)
- * 负责解析玩家自然语言意图，并动态组装手持物品、注视目标、已装模组、外部百科与生存态势数据
+ * 负责解析玩家自然语言意图，并动态组装手持物品、注视目标、已装模组、外部百科、视觉看图与生存态势数据
  */
 public class PerceptionRouter {
 
@@ -11,6 +11,7 @@ public class PerceptionRouter {
         HAND_ITEM,       // 询问手持物品用途/合成
         CROSSHAIR_TARGET,// 询问准星注视的目标方块或生物
         WIKI_LOOKUP,     // 询问复杂机制、BOSS 攻略或要求查百科
+        VISION_LOOK,     // 询问画面、建筑外观、风景评价（触发 OpenGL 关键时刻视觉截图）
         SAVE_LANDMARK,   // 自然语言标记当前坐标为地标（如“记住这里叫樱花基地”）
         SAVE_PROMISE,    // 自然语言立下共同约定（如“记住下次我们要去打末影龙”）
         GENERAL_CHAT     // 普通交谈
@@ -27,24 +28,32 @@ public class PerceptionRouter {
         String lower = userMessage.toLowerCase();
 
         // 1. 空间地标记忆意图（如“记住这里叫主基地”、“把这儿标记为刷怪塔”）
-        if ((lower.contains("记住这里") || lower.contains("标记这里") || lower.contains("把这里记作")
-                || lower.contains("这里是我们的") || lower.contains("这里叫"))) {
+        if (lower.contains("记住这里") || lower.contains("标记这里") || lower.contains("把这里记作")
+                || lower.contains("这里是我们的") || lower.contains("这里叫")) {
             return IntentType.SAVE_LANDMARK;
         }
 
         // 2. 共同约定记忆意图（如“记住我们约定明天去下界”、“别忘了下次一起造小黑塔”）
-        if ((lower.contains("记住我们") || lower.contains("我们的约定") || lower.contains("别忘了下次")
-                || lower.contains("下次我们一起") || lower.contains("约定好"))) {
+        if (lower.contains("记住我们") || lower.contains("我们的约定") || lower.contains("别忘了下次")
+                || lower.contains("下次我们一起") || lower.contains("约定好")) {
             return IntentType.SAVE_PROMISE;
         }
 
-        // 3. 百科与深度攻略查询意图（如“查一下暮色森林九头蛇怎么打”、“查百科”、“机制是什么”）
+        // 3. 视觉画面/建筑鉴赏意图（如“看看我建的房子好看吗”、“评价一下这里的风景”、“[看]”）
+        if (lower.startsWith("[看]") || lower.contains("好看吗") || lower.contains("评价一下")
+                || lower.contains("打个分") || lower.contains("打分") || lower.contains("这建筑")
+                || lower.contains("建的房") || lower.contains("建的家") || lower.contains("装修")
+                || lower.contains("配色") || lower.contains("这风景") || lower.contains("看看画面")) {
+            return IntentType.VISION_LOOK;
+        }
+
+        // 4. 百科与深度攻略查询意图（如“查一下暮色森林九头蛇怎么打”、“查百科”、“机制是什么”）
         if (lower.contains("百科") || lower.contains("wiki") || lower.contains("攻略")
                 || lower.contains("怎么打") || lower.contains("怎么召唤") || lower.contains("多方块")) {
             return IntentType.WIKI_LOOKUP;
         }
 
-        // 4. 模组清单意图
+        // 5. 模组清单意图
         if (lower.contains("模组") || lower.contains("有哪些mod") || lower.contains("装了什么mod")
                 || lower.contains("装了哪些mod") || lower.contains("mod列表") || lower.contains("整合包")) {
             if (lower.contains("哪些") || lower.contains("什么") || lower.contains("有啥")
@@ -53,7 +62,7 @@ public class PerceptionRouter {
             }
         }
 
-        // 5. 手持物品意图
+        // 6. 手持物品意图
         if (lower.contains("手里") || lower.contains("手持") || lower.contains("拿着") || lower.contains("拿的")
                 || lower.contains("这是什么") || lower.contains("这东西") || lower.contains("怎么做")
                 || lower.contains("怎么合成") || lower.contains("有什么用") || lower.contains("怎么用")
@@ -61,7 +70,7 @@ public class PerceptionRouter {
             return IntentType.HAND_ITEM;
         }
 
-        // 6. 注视目标意图
+        // 7. 注视目标意图
         if (lower.contains("前面") || lower.contains("面前") || lower.contains("看着")
                 || lower.contains("注视") || lower.contains("那是什么") || lower.contains("这生物")
                 || lower.contains("这怪") || lower.contains("这树") || lower.contains("这个方块")) {
@@ -132,6 +141,11 @@ public class PerceptionRouter {
             case CROSSHAIR_TARGET:
                 sb.append(crosshairCard)
                   .append("\n（请根据上面提取的视线目标数据，向玩家介绍面前的目标属于哪个模组、有什么机制或注意事项）");
+                break;
+
+            case VISION_LOOK:
+                sb.append(crosshairCard).append("\n");
+                sb.append("（请结合玩家眼前的画面截图与环境数据，真诚、细致地点评眼前的建筑/风景或解答画面中的内容，控制在 90 字以内）");
                 break;
 
             case WIKI_LOOKUP:

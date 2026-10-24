@@ -17,7 +17,7 @@
 | **Phase 3** | 原生 ChatHud 聊天交互与轻量 Markdown 富文本染色 | ✅ **已完成** | 100% |
 | **Phase 4** | 跨模组物品全息自省、实时合成表反查与主动感知 | ✅ **已完成** | 100% |
 | **Phase 5** | 三层本地持久化记忆库、久别重逢情感引擎与自主查百科 | ✅ **已完成** | 100% |
-| **Phase 6** | OpenGL Framebuffer 关键时刻视觉截图与四页签配置屏 | ⏳ **准备开始** | 0% |
+| **Phase 6** | OpenGL Framebuffer 关键时刻视觉截图与四页签配置屏 | ✅ **已完成** | 100% |
 
 ---
 
@@ -70,11 +70,11 @@
 ---
 
 ### Phase 6：OpenGL 关键时刻视觉截图与四页签配置屏（M4 核心）
-- [ ] **Step 6.1**：在渲染主线程调用 `ScreenshotRecorder.takeScreenshot(client.getFramebuffer())` 安全捕获画面
-- [ ] **Step 6.2**：在后台守护线程异步将图像缩放至 1280×720 并进行 Quality 78% JPEG Base64 编码
-- [ ] **Step 6.3**：编写 `PerceptionRouter.java` 视觉意图识别器，配合快捷键 `V`（一键看图）与双模型路由（日常文本模型 + 视觉多模态模型）
-- [ ] **Step 6.4**：编写 `CompanionConfigScreen.java` 四页签独立配置中心（API 与模型设置、人格提示词工坊、主动发言频率、记忆与百科管理）
-- [ ] **Step 6.5**：注册 `K` 键一键呼出配置中心，支持游戏内保存并即时生效
+- [x] **Step 6.1**：在渲染主线程调用 `ScreenshotRecorder.takeScreenshot(client.getFramebuffer())` 安全捕获画面
+- [x] **Step 6.2**：在后台守护线程异步将图像缩放至 1280×720 并进行 Quality 78% JPEG Base64 编码
+- [x] **Step 6.3**：编写 `PerceptionRouter.java` 视觉意图识别器，配合快捷键 `V`（一键看图）与双模型路由（日常文本模型 + 视觉多模态模型 + 纯文本平滑自动降级）
+- [x] **Step 6.4**：编写 `CompanionConfigScreen.java` 四页签独立配置中心（API 与模型设置、人格提示词工坊、主动发言频率、记忆与百科管理）
+- [x] **Step 6.5**：注册 `K` 键一键呼出配置中心，支持游戏内保存并即时生效
 
 ---
 
@@ -88,8 +88,9 @@
 | **2026-10-21** | Phase 3 (Step 3.1~3.4) | 实现 `ChatColorFormatter` 与客户端 `/ai` 聊天指令监听，成功在 Minecraft 1.20.1 原生单人世界中完成第一句端到端对话互动测试（M1 阶段圆满闭环） | 主人 & 双子猫娘 |
 | **2026-10-21** | Phase 4 (Step 4.1~4.6) | 编写 `ModIntrospector` 跨模组自省引擎、`PerceptionRouter` 意图路由器、`StateSnapshotter` 生存态势感知、`ProactiveScheduler` 主动发言调度器与 `H` 键快捷自省，全面打通自然语言免指令唤醒（M2 阶段圆满闭环） | 主人 & 双子猫娘 |
 | **2026-10-24** | Phase 5 (Step 5.1~5.6) | 实现 `LocalMemoryManager` 三层持久化记忆库（L1 滑动窗口、L2 核心档案、L3 情景日记流）、`ReEntryGreetingEngine` 五档阶梯式重逢问候引擎、`WikiLookupService` 多渠道百科异步检索与本地缓存，并接入故地重游空间唤醒（M3 阶段圆满闭环） | 主人 & 双子猫娘 |
+| **2026-10-24** | Phase 6 (Step 6.1~6.5) | 实现 `ScreenCapturer` 二阶段安全 OpenGL 截屏与 JPEG Base64 编码、`LlmClient.chatVisionAsync` 多模态路由与纯文本平滑降级、`CompanionConfigScreen` 四页签可视化配置中心，并注册 `V` 键看图与 `K` 键配置热键（M4 阶段圆满闭环，全六阶段 100% 达成！） | 主人 & 双子猫娘 |
 
 ---
 
-## 🎯 当前任务焦点（Next Action）
-👉 **下一步**：开启最终阶段 **Phase 6：OpenGL 关键时刻视觉截图与四页签配置屏（M4 核心）**，实现游戏内按 `V` 键一键截屏发给多模态大模型看风景/建筑，以及按 `K` 键呼出四页签可视化配置中心！
+## 🎉 全阶段里程碑圆满完成总结
+**MineCompanion AI (v1.0.0)** 的六大核心研发阶段已全部 100% 交付并通过构建验证！产出的模组包位于 `build/libs/minecompanion-1.0.0-alpha.jar`，可直接放入任何 Minecraft 1.20.1 Fabric 整合包的 `mods` 文件夹中使用！

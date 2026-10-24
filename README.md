@@ -1,83 +1,49 @@
-# 🌸 MineCompanion AI (Minecraft 1.20.1+)
+# MineCompanion AI (Minecraft 1.20.1 智能同游伙伴 Mod)
 
-<div align="center">
+> **让一位真正看得见世界、懂得全模组配方、会自己翻阅 MC百科、并且永远记得你们共同回忆的 AI 伙伴常驻在你的 Minecraft 聊天框里！**
 
-**为 Minecraft 打造的高沉浸感、跨模组自省、具备长期记忆与现实时间共鸣的 AI 游戏同游伙伴**
+## ✨ 核心特性一览
 
-[系统架构设计文档](./minecraft_ai_companion_mod_design.md) • [开发进度与学习手册](./DEVELOPMENT_STEPS.md)
-
-</div>
-
----
-
-## 🌟 核心特性亮点
-
-- ⚡ **原生融入聊天栏 (`ChatHud`)**：100% 融入原版聊天栏，无需割裂的实体模型或繁重的独立大面板，支持轻量 Markdown 染色与流式打字机效果。
-- 👁️ **混合感知架构**：
-  - **日常状态流**：超低延迟、极低 Token 消耗的结构化游戏状态采集（生命、群系、时间、手持物品所属 Mod、周围实体）。
-  - **按需视觉感知**：在询问“看我建的房子怎么样/看光影风景”时，异步捕获当前 OpenGL Framebuffer 渲染帧画面，直达多模态视觉大模型。
-- 🔍 **跨模组全息自省与自主查百科**：
-  - 运行时自省已安装模组注册表与完整 Tooltip 说明。
-  - 实时反查 `RecipeManager` 内存真实合成表（天然兼容 KubeJS / CraftTweaker 整合包魔改配方）。
-  - 支持大模型 Tool Calling 自主异步查询 [MC百科](https://www.mcmod.cn/)、[中文 Minecraft Wiki](https://zh.minecraft.wiki/) 与 [Modrinth API](https://docs.modrinth.com/api/)，并缓存在本地。
-- 🧠 **三层本地持久化记忆**：
-  - **L1 短期记忆**：会话工作环形缓冲区，保证重进存档瞬间无缝续聊。
-  - **L2 核心事实**：结构化小文档（`core_memory.json`），永久铭记基地地标坐标、共同约定与大事记。
-  - **L3 情景日记**：只追加日志流（`episodic_log.jsonl`），支持故地重游与关键词场景唤醒。
-- ⏰ **现实离线时长情感反馈（重逢问候）**：
-  - 自动感知现实生活作息与离线时长（5 档情绪阶梯），从同天小别的默契续聊，到隔周未上线的委屈抱怨与撒娇想念。
-- 🌐 **多模型与双模型路由兼容**：
-  - 采用标准 OpenAI 兼容协议，支持自由配置 Base URL、API Key 与 Model Name。
-  - 支持接入 OpenAI (`gpt-4o`)、Gemini (`gemini-2.5-flash`)、DeepSeek (`deepseek-chat`) 等主流服务商。
+1. **免指令自然语言唤醒 & 原生彩色聊天体验**
+   - 直接在原版聊天栏按 `T` 打字即可与伙伴【小爱】自然对话（可在配置中心随时开关）。
+   - 自动将大模型输出的 Markdown 转换为 Minecraft 原生彩色富文本（`§b`、`§e`、`§l`）。
+2. **跨模组全息自省与实时配方反查 (`ModIntrospector`)**
+   - 按 **`H` 键**（或输入 `/item`、`/target`、`/mods`）一键识别手中物品或准星注视方块/生物所属的 Mod、完整高级 Tooltip 以及当前存档内存中的真实合成表（100% 兼容 KubeJS / CraftTweaker 整合包魔改）。
+3. **三层本地持久化记忆库 (`LocalMemoryManager`)**
+   - **L1 短期工作记忆** (`recent_session_context.json`)：16 条滑动窗口多轮上下文，重进存档无缝续聊。
+   - **L2 永久核心档案** (`core_memory.json`)：记住你标记的基地地标（说*“记住这里叫樱花木屋”*或 `/remember 樱花木屋`）、共同约定与偏好，走回基地 32 格内自动触发**故地重游**感叹。
+   - **L3 情景日记流** (`episodic_log.jsonl`)：只追加历史共同经历日志，支持双字词重合度与空间坐标混合检索。
+4. **五档现实离线时长“久别重逢”情感引擎 (`ReEntryGreetingEngine`)**
+   - 重新进入存档时，根据现实离线时间差（`<30分钟`、`同天`、`隔日`、`3~14天多日未见委屈撒娇`、`>14天跨月控诉与感动`）以及深夜熬夜生物钟，主动送上充满温度的重逢问候。
+5. **自主联网查百科与本地缓存 (`WikiLookupService`)**
+   - 遇到复杂模组机制或 BOSS 攻略（说*“查百科 暮色森林九头蛇怎么打”*或 `/wiki <关键词>`），自动异步检索**中文 Minecraft Wiki**、**MC百科 (mcmod.cn)** 与 **Modrinth API**，并缓存在本地 `wiki_cache.json`。
+6. **OpenGL 二阶段安全视觉截屏 (`ScreenCapturer`) & 四页签配置中心 (`CompanionConfigScreen`)**
+   - 按 **`V` 键**（或输入 `/look`、说*“看看我建的房子好看吗”*）一键截取当前游戏画面（720p JPEG Base64）交由多模态模型鉴赏（纯文本模型自动平滑降级为结构化态势感知）。
+   - 按 **`K` 键**（或输入 `/config`）随时呼出游戏内**《AI 伙伴控制中心》四页签 GUI**，支持一键切换服务商预设、测试 API 连通性、切换四套预设人格模板、调节主动发言冷却与管理记忆库！
 
 ---
 
-## 🛠️ 技术栈与环境要求
+## 🎮 快捷键与指令速查表
 
-| 组件 | 版本 / 规范 | 说明 |
-| :--- | :--- | :--- |
-| **游戏版本** | Minecraft `1.20.1` | 客户端首发支持 |
-| **模组加载器** | Fabric Loader (`0.15.11+`) | 轻量、高兼容性 |
-| **开发语言** | Java `17` LTS | 纯 Java 解耦核心 + Fabric API 适配层 |
-| **构建工具** | Gradle + Fabric Loom | 标准 Minecraft Mod 构建流 |
+| 快捷键 / 指令 | 功能说明 |
+| :--- | :--- |
+| **直接聊天栏打字** | 免指令自动唤醒 AI 伙伴（自动识别查模组、问手中物品、看面前目标、记地标、查百科、看画面） |
+| **`H` 键** / `/item` / `/target` | 一键自省手中所持模组物品（含真实合成配方）或准星注视的方块/生物 |
+| **`V` 键** / `/look [问题]` | 一键截取当前游戏画面，让 AI 评价建筑、风景或画面内容 |
+| **`K` 键** / `/config` | 打开《AI 伙伴控制中心》四页签可视化配置界面 |
+| `/mods` | 查看当前整合包已安装的所有功能性 Mod 汇总 |
+| `/wiki <关键词>` | 联网检索中文 Minecraft Wiki / MC百科 / Modrinth 资料并由 AI 总结攻略 |
+| `/remember <地标名>` | 将当前所在的三维坐标标记为永久记忆地标（走回附近自动触发故地重游） |
+| `/memory` | 在聊天框查看当前存档已记住的地标坐标、共同约定与最近活动记录 |
 
 ---
 
-## 📂 项目结构规范
+## 🛠️ 编译与运行指南
 
-```text
-MineCompanion-AI/
-├── minecraft_ai_companion_mod_design.md   # 系统详细设计规范与架构白皮书
-├── DEVELOPMENT_STEPS.md                  # 详细开发步骤与学习进度跟踪手册
-├── .gitignore                            # 编译缓存与敏感 API Key 隔离规则
-├── build.gradle                          # Fabric Loom 构建脚本
-├── gradle.properties                     # 模组元数据与本地 JDK 路径配置
-└── src/
-    └── main/
-        ├── java/com/minecompanion/
-        │   ├── core/                     # 纯 Java 核心解耦层（LLM、记忆、百科、路由）
-        │   └── mc/                       # Minecraft 1.20.1 客户端适配层（事件、UI、截图）
-        └── resources/                    # 模组资源、Mixin 配置与元数据
+```powershell
+# 1. 编译并打包模组 JAR（产出位于 build/libs/minecompanion-1.0.0-alpha.jar）
+.\gradlew.bat build
+
+# 2. 启动开发环境客户端进入游戏测试（跳过慢速音效资源下载）
+.\gradlew.bat runClient -x downloadAssets
 ```
-
----
-
-## 🚀 快速上手与更新指南
-
-### 1. 克隆代码库
-```bash
-git clone <repository-url>
-cd "MineCraft Mod"
-```
-
-### 2. 构建工程
-```bash
-./gradlew build
-```
-
----
-
-## 📄 许可与致谢
-
-本项目参考并吸收了开源社区 [Dwinovo/minecraft-numen](https://github.com/Dwinovo/minecraft-numen) 的优秀架构思想（双件套落盘哲学与解耦规范）。
-本项目采用 [MIT 许可证](LICENSE)。
