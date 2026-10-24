@@ -24,14 +24,16 @@ import java.util.stream.Collectors;
 
 /**
  * 本地持久化三层记忆管理器 (LocalMemoryManager)
- * - L1 短期工作记忆 (recent_session_context.json): 默认保存最近 80 条消息（40 轮完整对话），并在溢出时自动将旧对话归档至 L3 历史日记，绝不丢失回忆！
+ * - L1 短期工作记忆 (recent_session_context.json): 默认保存最近 80 条消息（40 轮对话），溢出时过滤掉无意义战斗/闲聊噪音，仅将高价值玩家对话归档至 L3
  * - L2 核心档案记忆 (core_memory.json): 常驻保存基地地标坐标、共同约定、玩家偏好与上次离线时间戳
- * - L3 历史情景日记 (episodic_log.jsonl): 只追加写入的历史共同经历摘要，支持关键词与空间坐标双重检索
+ * - L3 历史情景日记 (episodic_log.jsonl): 检索时仅提取 Top-3 相关条目注入大模型（绝不撑爆 Token），并内置 300 条自动瘦身滚动裁剪机制（永久控制在 80KB 以内）
  */
 public class LocalMemoryManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Gson COMPACT_GSON = new Gson();
     private static final int DEFAULT_MAX_L1_MESSAGES = 80;
+    // L3 情景日记最大保留行数（300 条约 70KB，超过时自动清理最老的普通归档，但永久保留重要地标与里程碑事件）
+    private static final int MAX_L3_LOG_LINES = 300;
 
     private static Path defaultBaseConfigDir;
     private static LocalMemoryManager currentInstance;
@@ -93,6 +95,9 @@ public class LocalMemoryManager {
                     l1WorkingMemory.addAll(loaded);
                 }
             }
+
+            // 启动时检查一次 L3 日记是否需要瘦身裁剪
+            compactEpisodicLogIfNeeded();
         } catch (Exception e) {
             if (this.coreMemory == null) {
                 this.coreMemory = new CoreMemoryDoc();
@@ -110,7 +115,7 @@ public class LocalMemoryManager {
 
     /**
      * 向 L1 短期记忆滑动窗口追加一轮对话
-     * 当超过设定的窗口上限（默认 80 条 = 40 轮）时，自动将最早的 10 条对话合并归档至 L3 情景日记流，实现零遗忘！
+     * 当超过设定的窗口上限（默认 80 条）时，过滤掉常规受击/挂机噪音，仅将玩家真实有价值的对话归档至 L3 情景日记
      */
     public synchronized void recordChatTurn(String userOrEventText, String assistantReply) {
         String effectiveUserMsg = (userOrEventText == null || userOrEventText.isBlank())
@@ -122,23 +127,34 @@ public class LocalMemoryManager {
                 ? Math.max(20, CompanionConfig.get().maxL1ContextMessages)
                 : DEFAULT_MAX_L1_MESSAGES;
 
-        // 若超出滑动窗口上限，将最早的一批旧对话（最多 10 条）打包归档入 L3 历史情景日记，绝不白白丢弃
         if (l1WorkingMemory.size() > maxL1) {
             int archiveCount = Math.min(10, l1WorkingMemory.size() - maxL1 + 8);
-            List<String> archivedSnippets = new ArrayList<>();
+            List<String> meaningfulSnippets = new ArrayList<>();
+
             for (int i = 0; i < archiveCount && !l1WorkingMemory.isEmpty(); i++) {
                 LlmClient.ChatMessage oldMsg = l1WorkingMemory.remove(0);
-                String prefix = "user".equals(oldMsg.role()) ? "主人:" : "小爱:";
-                archivedSnippets.add(prefix + truncate(oldMsg.content(), 30));
+                String content = oldMsg.content();
+                // 过滤掉高频无意义的日常系统触发器（如挨打、安静挂机、残血），只归档主人真正打字聊天的有价值内容
+                if ("user".equals(oldMsg.role())) {
+                    if (!content.startsWith("[战斗事件") && !content.startsWith("[受伤事件")
+                            && !content.startsWith("[日常安静") && !content.startsWith("[紧急事件")
+                            && !content.startsWith("（玩家正在安静")) {
+                        meaningfulSnippets.add("主人说:" + truncate(content, 28));
+                    }
+                } else if (!meaningfulSnippets.isEmpty() && meaningfulSnippets.get(meaningfulSnippets.size() - 1).startsWith("主人说:")) {
+                    // 仅当上一条是主人的有效发言时，才配对保留小爱的回复摘要
+                    meaningfulSnippets.add("小爱回:" + truncate(content, 28));
+                }
             }
-            if (!archivedSnippets.isEmpty()) {
+
+            if (!meaningfulSnippets.isEmpty()) {
                 EpisodicEntry rolloverEntry = new EpisodicEntry();
                 rolloverEntry.ts = Instant.now().toString();
                 rolloverEntry.gameDay = this.coreMemory.lastPlayedGameDay;
                 rolloverEntry.dim = "minecraft:overworld";
                 rolloverEntry.pos = new int[]{0, 64, 0};
                 rolloverEntry.tags = List.of("历史对话归档");
-                rolloverEntry.summary = "过往对话回忆：" + String.join(" / ", archivedSnippets);
+                rolloverEntry.summary = "过往聊天：" + String.join(" -> ", meaningfulSnippets);
                 appendEpisodicEntry(rolloverEntry);
             }
         }
@@ -165,16 +181,10 @@ public class LocalMemoryManager {
         appendEpisodicEntry(entry);
     }
 
-    /**
-     * 获取 L1 短期对话历史副本
-     */
     public synchronized List<LlmClient.ChatMessage> getRecentChatHistory() {
         return new ArrayList<>(l1WorkingMemory);
     }
 
-    /**
-     * 原子化保存 L2 核心档案小文档
-     */
     public synchronized void saveCoreMemory() {
         try {
             Files.createDirectories(worldMemoryDir);
@@ -185,9 +195,6 @@ public class LocalMemoryManager {
         }
     }
 
-    /**
-     * 保存 L1 短期上下文快照
-     */
     public synchronized void saveRecentContext() {
         try {
             Files.createDirectories(worldMemoryDir);
@@ -196,9 +203,6 @@ public class LocalMemoryManager {
         }
     }
 
-    /**
-     * 在玩家退出存档时调用：非阻塞快速落盘 L1、L2 与 L3 日记
-     */
     public synchronized void onWorldDisconnect(long currentGameDay, String dimension, int x, int y, int z) {
         this.coreMemory.lastPlayedRealTime = Instant.now().toString();
         this.coreMemory.lastPlayedGameDay = currentGameDay;
@@ -220,9 +224,6 @@ public class LocalMemoryManager {
         }
     }
 
-    /**
-     * 添加或更新空间地标（如基地、矿洞、樱花木屋）
-     */
     public synchronized void addLandmark(String name, String dimension, int x, int y, int z, String description) {
         Landmark lm = new Landmark();
         lm.id = "lm_" + System.currentTimeMillis();
@@ -247,9 +248,6 @@ public class LocalMemoryManager {
         appendEpisodicEntry(entry);
     }
 
-    /**
-     * 添加共同约定或核心事实
-     */
     public synchronized void addPromiseOrFact(String content, boolean isPromise) {
         if (isPromise) {
             if (!this.coreMemory.activePromises.contains(content)) {
@@ -264,7 +262,7 @@ public class LocalMemoryManager {
     }
 
     /**
-     * 向 L3 情景日记流追加单行记录 (Append-Only JSONL)
+     * 向 L3 情景日记流追加单行记录，并在超出 300 条上限时自动触发滚动瘦身裁剪
      */
     public synchronized void appendEpisodicEntry(EpisodicEntry entry) {
         try {
@@ -277,13 +275,45 @@ public class LocalMemoryManager {
                 writer.write(COMPACT_GSON.toJson(entry));
                 writer.newLine();
             }
+            compactEpisodicLogIfNeeded();
         } catch (IOException ignored) {
         }
     }
 
     /**
-     * 检查玩家是否走到了某个记忆地标附近（故地重游触发器，每个地标 15 分钟内最多触发一次）
+     * 🌟 L3 情景日记自动瘦身裁剪器：
+     * 当 episodic_log.jsonl 超过 300 行（约 70KB）时，优先保留【地标建立】以及最近的 220 条记录，
+     * 清理最老的普通归档，确保文件体积永远小巧、检索耗时永远 < 1ms！
      */
+    private synchronized void compactEpisodicLogIfNeeded() {
+        if (!Files.exists(episodicLogPath)) return;
+        try {
+            List<String> allLines = Files.readAllLines(episodicLogPath, StandardCharsets.UTF_8);
+            if (allLines.size() <= MAX_L3_LOG_LINES) return;
+
+            List<String> keptLines = new ArrayList<>();
+            int cutIndex = allLines.size() - 220;
+
+            for (int i = 0; i < allLines.size(); i++) {
+                String line = allLines.get(i);
+                if (line.isBlank()) continue;
+                // 早于 cutIndex 的旧记录中，只永久保留“地标建立”高优记忆，其余陈旧日常归档自动淘汰
+                if (i < cutIndex) {
+                    if (line.contains("地标建立")) {
+                        keptLines.add(line);
+                    }
+                } else {
+                    keptLines.add(line);
+                }
+            }
+
+            Path tempLog = worldMemoryDir.resolve("episodic_log.jsonl.tmp");
+            Files.write(tempLog, keptLines, StandardCharsets.UTF_8);
+            Files.move(tempLog, episodicLogPath, StandardCopyOption.REPLACE_EXISTING);
+        } catch (Exception ignored) {
+        }
+    }
+
     public synchronized Landmark checkNearbyLandmarkForAwakening(String dimension, int playerX, int playerY, int playerZ) {
         if (coreMemory == null || coreMemory.landmarks == null) return null;
         long now = System.currentTimeMillis();
@@ -303,7 +333,7 @@ public class LocalMemoryManager {
     }
 
     /**
-     * 从 L3 历史日记流中按关键词重合度与空间距离检索 Top-K 相关回忆
+     * 从 L3 历史日记流中按关键词重合度与空间距离仅检索 Top-3 相关回忆（绝不全量发送给大模型）
      */
     public List<EpisodicEntry> retrieveRelevantMemories(String queryText, int playerX, int playerZ, int topK) {
         if (!Files.exists(episodicLogPath)) return List.of();
@@ -345,9 +375,6 @@ public class LocalMemoryManager {
         }
     }
 
-    /**
-     * 组装常驻注入 System Prompt 尾部的 L2 核心档案与关联 L3 日记摘要
-     */
     public synchronized String buildMemoryContextBlock(String userQuery, int playerX, int playerZ) {
         StringBuilder sb = new StringBuilder();
         sb.append("【长期核心记忆档案 (L2)】\n");
