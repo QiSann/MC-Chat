@@ -46,8 +46,9 @@ usernamecache.json
 Thumbs.db
 desktop.ini
 
-# 6. 打包产物与压缩包
+# 6. 打包产物与压缩包（允许 releases/ 目录下的正式发布模组 jar 包上传至仓库）
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
+!releases/*.jar
 *.zip
 *.tar.gz
