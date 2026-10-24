@@ -5,6 +5,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.minecompanion.core.config.CompanionConfig;
+import com.minecompanion.core.memory.LocalMemoryManager;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -104,6 +105,47 @@ public class LlmClient {
         }
         list.add(new ChatMessage("user", userQuestion));
         return chatAsync(list);
+    }
+
+    /**
+     * 结合三层记忆库 (L1 多轮上下文 + L2 核心档案 + L3 情景日记) 发起智能对话，并在回复后自动记录到 L1 滑动窗口
+     */
+    public static CompletableFuture<String> chatWithMemoryAsync(
+            String rawUserText,
+            String assembledUserPrompt,
+            String memoryContextBlock) {
+
+        CompanionConfig config = CompanionConfig.get();
+        List<ChatMessage> list = new ArrayList<>();
+
+        // 1. 组装 System Prompt + L2/L3 记忆档案
+        StringBuilder sysBuilder = new StringBuilder();
+        if (config.systemPrompt != null && !config.systemPrompt.isBlank()) {
+            sysBuilder.append(config.systemPrompt).append("\n\n");
+        }
+        if (memoryContextBlock != null && !memoryContextBlock.isBlank()) {
+            sysBuilder.append(memoryContextBlock);
+        }
+        if (!sysBuilder.isEmpty()) {
+            list.add(new ChatMessage("system", sysBuilder.toString().trim()));
+        }
+
+        // 2. 注入 L1 短期多轮对话滑动窗口
+        LocalMemoryManager memMgr = LocalMemoryManager.getCurrent();
+        if (memMgr != null) {
+            list.addAll(memMgr.getRecentChatHistory());
+        }
+
+        // 3. 压入本轮组装后的用户提问
+        list.add(new ChatMessage("user", assembledUserPrompt));
+
+        return chatAsync(list).thenApply(reply -> {
+            // 若成功获得正常回复（非报错提示），则记入 L1 工作记忆滑动窗口
+            if (memMgr != null && rawUserText != null && !rawUserText.isBlank() && !reply.startsWith("【")) {
+                memMgr.recordChatTurn(rawUserText, reply);
+            }
+            return reply;
+        });
     }
 
     /**

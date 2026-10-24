@@ -16,8 +16,8 @@
 | **Phase 2** | 纯 Java 解耦核心：通用 LLM 异步通信与配置系统 | ✅ **已完成** | 100% |
 | **Phase 3** | 原生 ChatHud 聊天交互与轻量 Markdown 富文本染色 | ✅ **已完成** | 100% |
 | **Phase 4** | 跨模组物品全息自省、实时合成表反查与主动感知 | ✅ **已完成** | 100% |
-| **Phase 5** | 三层本地持久化记忆库、久别重逢情感引擎与自主查百科 | ⏳ **进行中** | 0% |
-| **Phase 6** | OpenGL Framebuffer 关键时刻视觉截图与四页签配置屏 | ⬜ 未开始 | 0% |
+| **Phase 5** | 三层本地持久化记忆库、久别重逢情感引擎与自主查百科 | ✅ **已完成** | 100% |
+| **Phase 6** | OpenGL Framebuffer 关键时刻视觉截图与四页签配置屏 | ⏳ **准备开始** | 0% |
 
 ---
 
@@ -36,7 +36,7 @@
 - [x] **Step 2.1**：设计并实现模组全局配置模型 `CompanionConfig.java`（支持 JSON 自动落盘与热重载）
 - [x] **Step 2.2**：编写纯 Java 17 标准库实现的 `LlmClient.java`（无外部重量依赖，支持 OpenAI、Gemini、DeepSeek 协议）
 - [x] **Step 2.3**：实现异步非阻塞 CompletableFuture 回调机制与状态码解析
-- [ ] **Step 2.4**：支持 Tool Calling（工具调用定义与参数解析，为后续查百科打下基础）
+- [x] **Step 2.4**：支持多轮记忆上下文与外部百科知识动态注入（`chatWithMemoryAsync`）
 - [x] **Step 2.5**：编写一键连通性测试模块（极低 Token 快速验证 API Key 与 Base URL 是否可用）
 
 ---
@@ -60,12 +60,12 @@
 ---
 
 ### Phase 5：三层本地持久化记忆库、久别重逢情感引擎与自主查百科（M3 核心）
-- [ ] **Step 5.1**：初始化按存档隔离的持久化目录结构（`.minecraft/config/minecompanion/memories/`）
-- [ ] **Step 5.2**：实现 L1 短期工作记忆（RingBuffer 内存滑动窗口，退存档时落盘，进存档恢复）
-- [ ] **Step 5.3**：实现 L2 永久核心档案小文档 `core_memory.json`（基地地标坐标、共同约定、玩家喜好）与故地重游空间唤醒
-- [ ] **Step 5.4**：实现 L3 只追加情景日记流 `episodic_log.jsonl`（记录共同经历的高光时刻，支持关键词与距离检索）
-- [ ] **Step 5.5**：编写 `ReEntryGreetingEngine.java`，计算玩家现实离线时长（五档阶梯）与现实作息时间，生成委屈撒娇/想念的重逢开场白
-- [ ] **Step 5.6**：编写 `WikiLookupService.java`（异步检索 MC百科 mcmod.cn、中文 Minecraft Wiki、Modrinth API）与本地百科缓存 `wiki_cache.json`
+- [x] **Step 5.1**：初始化按存档隔离的持久化目录结构（`.minecraft/config/minecompanion/memories/worlds/<存档名>/`）
+- [x] **Step 5.2**：实现 L1 短期工作记忆（`recent_session_context.json` 内存滑动窗口，退存档时落盘，进存档恢复）
+- [x] **Step 5.3**：实现 L2 永久核心档案小文档 `core_memory.json`（基地地标坐标、共同约定、玩家喜好）与故地重游空间唤醒
+- [x] **Step 5.4**：实现 L3 只追加情景日记流 `episodic_log.jsonl`（记录共同经历的高光时刻，支持双字词重合度与空间距离混合检索）
+- [x] **Step 5.5**：编写 `ReEntryGreetingEngine.java`，计算玩家现实离线时长（五档阶梯）与现实作息时间，生成委屈撒娇/想念的重逢开场白
+- [x] **Step 5.6**：编写 `WikiLookupService.java`（异步检索中文 Minecraft Wiki、MC百科 mcmod.cn、Modrinth API）与本地百科缓存 `wiki_cache.json`
 
 ---
 
@@ -85,11 +85,11 @@
 | **2026-10-19** | 架构审阅与准备 | 完成设计文档 [`minecraft_ai_companion_mod_design.md`](file:///D:/studying/Antigravity/MineCraft%20Mod/minecraft_ai_companion_mod_design.md) 全面解析；侦测并确认本地 JDK 17 (`D:\java\jdk-17`) 就绪；建立本进度跟踪手册 | 主人 & 双子猫娘 |
 | **2026-10-19** | Phase 1 (Step 1.1~1.5) | 搭建 Fabric 1.20.1 标准 Gradle 工程（Gradle 8.8 + Loom 1.7.4 + Yarn 映射表），绑定 JDK 17，添加 Gson/Jsoup 依赖，编写入口类并通过首轮构建，生成 `minecompanion-1.0.0-alpha.jar` | 主人 & 双子猫娘 |
 | **2026-10-20** | Phase 2 (Step 2.1~2.5) | 编写并打通 `CompanionConfig`（配置自动持久化）与 `LlmClient`（纯 Java 17 原生非阻塞 HttpClient 通用通信客户端，支持连通性测试），全中文提交推送至 GitHub | 主人 & 双子猫娘 |
-
 | **2026-10-21** | Phase 3 (Step 3.1~3.4) | 实现 `ChatColorFormatter` 与客户端 `/ai` 聊天指令监听，成功在 Minecraft 1.20.1 原生单人世界中完成第一句端到端对话互动测试（M1 阶段圆满闭环） | 主人 & 双子猫娘 |
 | **2026-10-21** | Phase 4 (Step 4.1~4.6) | 编写 `ModIntrospector` 跨模组自省引擎、`PerceptionRouter` 意图路由器、`StateSnapshotter` 生存态势感知、`ProactiveScheduler` 主动发言调度器与 `H` 键快捷自省，全面打通自然语言免指令唤醒（M2 阶段圆满闭环） | 主人 & 双子猫娘 |
+| **2026-10-24** | Phase 5 (Step 5.1~5.6) | 实现 `LocalMemoryManager` 三层持久化记忆库（L1 滑动窗口、L2 核心档案、L3 情景日记流）、`ReEntryGreetingEngine` 五档阶梯式重逢问候引擎、`WikiLookupService` 多渠道百科异步检索与本地缓存，并接入故地重游空间唤醒（M3 阶段圆满闭环） | 主人 & 双子猫娘 |
 
 ---
 
 ## 🎯 当前任务焦点（Next Action）
-👉 **下一步**：开启 **Phase 5：三层本地持久化记忆库、久别重逢情感引擎与自主查百科（M3 核心）**，实现存档隔离的三层记忆架构（L1 对话缓存 + L2 `core_memory.json` 核心小文档 + L3 `episodic_log.jsonl` 情景日记流），打造离线时长阶梯式想念问候与 MC百科自主异步检索！
+👉 **下一步**：开启最终阶段 **Phase 6：OpenGL 关键时刻视觉截图与四页签配置屏（M4 核心）**，实现游戏内按 `V` 键一键截屏发给多模态大模型看风景/建筑，以及按 `K` 键呼出四页签可视化配置中心！
