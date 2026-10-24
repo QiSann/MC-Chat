@@ -5,11 +5,11 @@
 
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1-brightgreen?style=for-the-badge&logo=minecraft)](https://www.minecraft.net/)
 [![Mod Loader](https://img.shields.io/badge/Loader-Fabric-dbd0b4?style=for-the-badge)](https://fabricmc.net/)
-[![Version](https://img.shields.io/badge/Release-v1.1.0-ff69b4?style=for-the-badge)](releases/minecompanion-1.1.0.jar)
+[![Version](https://img.shields.io/badge/Release-v1.1.0-ff69b4?style=for-the-badge)](https://github.com/QiSann/MC-Chat/releases/tag/v1.1.0)
 [![Java](https://img.shields.io/badge/Java-17%2B-orange?style=for-the-badge&logo=openjdk)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 
-👉 **[📦 点击此处直接下载最新正式版模组包 (`releases/minecompanion-1.1.0.jar`)](releases/minecompanion-1.1.0.jar)** 👈
+👉 **[📦 点击直接下载最新正式版模组 (`minecompanion-1.1.0.jar`)](https://github.com/QiSann/MC-Chat/releases/download/v1.1.0/minecompanion-1.1.0.jar)** │ **[📋 查看 GitHub Releases 发行版页面](https://github.com/QiSann/MC-Chat/releases)** 👈
 
 </div>
 
@@ -65,7 +65,7 @@
 ### 第一步：下载并安装模组
 1. 确保你的启动器（PCL2 / HMCL / Prism Launcher）已安装 **Minecraft 1.20.1** 与 **Fabric Loader (0.15.11+)**。
 2. 确保 `mods` 文件夹中已安装 **[Fabric API](https://modrinth.com/mod/fabric-api)**。
-3. 在本仓库的 **[`releases/`](releases/)** 文件夹中下载 **[`minecompanion-1.1.0.jar`](releases/minecompanion-1.1.0.jar)**，放入你的 `.minecraft/mods/` 文件夹中并启动游戏。
+3. 前往本仓库右侧的 **[Releases (发行版)](https://github.com/QiSann/MC-Chat/releases)** 页面下载 **[`minecompanion-1.1.0.jar`](https://github.com/QiSann/MC-Chat/releases/download/v1.1.0/minecompanion-1.1.0.jar)**，放入你的 `.minecraft/mods/` 文件夹中并启动游戏。
 
 ### 第二步：在游戏内按 `K` 键配置 API Key
 1. 进入游戏世界后，按下键盘上的 **`K` 键**（或在聊天栏输入 `/config`），即可弹出 **《MineCompanion AI 伙伴控制中心》**。
@@ -117,8 +117,6 @@
 
 ```text
 MineCraft Mod/
-├── releases/
-│   └── minecompanion-1.1.0.jar                 # 可直接安装至 .minecraft/mods/ 的正式发布模组包
 ├── build.gradle                                # Gradle 构建脚本（已内置打包 Jsoup HTML 解析器）
 ├── gradle.properties                           # Fabric Loom、Yarn 映射表与依赖版本配置
 ├── DEVELOPMENT_STEPS.md                        # 六阶段完整研发进度与学习复盘手册
