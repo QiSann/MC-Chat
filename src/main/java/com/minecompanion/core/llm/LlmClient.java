@@ -20,7 +20,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * 通用大模型异步通信客户端
  * 基于 Java 17 原生 HttpClient 实现，兼容 OpenAI / Gemini / DeepSeek 等主流服务商，
- * 支持多轮记忆上下文注入、双模型视觉路由 (Vision Multimodal) 以及纯文本模型平滑自动降级
+ * 全面支持 L1 多轮上下文记忆衔接、双模型视觉路由 (Vision Multimodal) 以及纯文本模型平滑自动降级
  */
 public class LlmClient {
     private static final Gson GSON = new Gson();
@@ -43,15 +43,13 @@ public class LlmClient {
     public static CompletableFuture<String> chatAsync(List<ChatMessage> messages) {
         CompanionConfig config = CompanionConfig.get();
 
-        // 1. 基础合法性校验
         if (config.apiKey == null || config.apiKey.isBlank()) {
             return CompletableFuture.completedFuture("【提示】未配置 API Key 喵！请按 K 键打开配置中心填入您的大模型密钥。");
         }
 
-        // 2. 组装 OpenAI 规范的请求体 JSON
         JsonObject requestBody = new JsonObject();
         requestBody.addProperty("model", config.modelName);
-        requestBody.addProperty("temperature", 0.7);
+        requestBody.addProperty("temperature", 0.85);
 
         JsonArray msgArray = new JsonArray();
         for (ChatMessage msg : messages) {
@@ -72,7 +70,6 @@ public class LlmClient {
                 .POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(requestBody), StandardCharsets.UTF_8))
                 .build();
 
-        // 3. 异步发送 HTTP 请求并解析返回的 JSON 结果
         return HTTP_CLIENT.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
                 .thenApply(response -> {
                     int statusCode = response.statusCode();
@@ -94,57 +91,54 @@ public class LlmClient {
     }
 
     /**
-     * 便捷方法：仅发送单条提问（自动附带 System Prompt）
-     */
-    public static CompletableFuture<String> chatSimpleAsync(String userQuestion) {
-        CompanionConfig config = CompanionConfig.get();
-        List<ChatMessage> list = new ArrayList<>();
-        if (config.systemPrompt != null && !config.systemPrompt.isBlank()) {
-            list.add(new ChatMessage("system", config.systemPrompt));
-        }
-        list.add(new ChatMessage("user", userQuestion));
-        return chatAsync(list);
-    }
-
-    /**
-     * 结合三层记忆库 (L1 多轮上下文 + L2 核心档案 + L3 情景日记) 发起智能对话，并在回复后自动记录到 L1 滑动窗口
+     * 结合 L1 连续对话上下文、实时环境快照与 L2/L3 记忆库发起对话，并将本轮互动（含主动事件）记入 L1 滑动窗口
+     *
+     * @param historyRecordText   写入 L1 历史记录的简短事件或玩家原话（保证下一句聊天能接上本轮）
+     * @param currentTurnPrompt   本轮发送给模型的用户消息/事件触发提示
+     * @param dynamicSystemAddons 注入在 System Prompt 尾部的实时环境、背包食物与长期记忆块
      */
     public static CompletableFuture<String> chatWithMemoryAsync(
-            String rawUserText,
-            String assembledUserPrompt,
-            String memoryContextBlock) {
+            String historyRecordText,
+            String currentTurnPrompt,
+            String dynamicSystemAddons) {
 
         CompanionConfig config = CompanionConfig.get();
         List<ChatMessage> list = new ArrayList<>();
 
-        // 1. 组装 System Prompt + L2/L3 记忆档案
+        // 1. 组装 System Prompt（人设 + 实时环境态势 + 背包食物 + L2/L3 长期记忆）
         StringBuilder sysBuilder = new StringBuilder();
         if (config.systemPrompt != null && !config.systemPrompt.isBlank()) {
             sysBuilder.append(config.systemPrompt).append("\n\n");
         }
-        if (memoryContextBlock != null && !memoryContextBlock.isBlank()) {
-            sysBuilder.append(memoryContextBlock);
+        sysBuilder.append("【重要对话准则】你正在和玩家实时连麦同游，请务必紧接着【历史对话上下文】往下聊，表现出真实的开心、生气、着急、吐槽或撒娇情绪，不要像机器人一样自顾自说套话！\n");
+        if (dynamicSystemAddons != null && !dynamicSystemAddons.isBlank()) {
+            sysBuilder.append("\n").append(dynamicSystemAddons);
         }
-        if (!sysBuilder.isEmpty()) {
-            list.add(new ChatMessage("system", sysBuilder.toString().trim()));
-        }
+        list.add(new ChatMessage("system", sysBuilder.toString().trim()));
 
-        // 2. 注入 L1 短期多轮对话滑动窗口
+        // 2. 注入 L1 短期多轮对话滑动窗口（包括之前玩家说的话与 AI 自己主动说的话）
         LocalMemoryManager memMgr = LocalMemoryManager.getCurrent();
         if (memMgr != null) {
             list.addAll(memMgr.getRecentChatHistory());
         }
 
-        // 3. 压入本轮组装后的用户提问
-        list.add(new ChatMessage("user", assembledUserPrompt));
+        // 3. 压入本轮提问或事件触发指令
+        list.add(new ChatMessage("user", currentTurnPrompt));
 
         return chatAsync(list).thenApply(reply -> {
-            // 若成功获得正常回复（非报错提示），则记入 L1 工作记忆滑动窗口
-            if (memMgr != null && rawUserText != null && !rawUserText.isBlank() && !reply.startsWith("【")) {
-                memMgr.recordChatTurn(rawUserText, reply);
+            // 只要成功拿到正常回复，无论是由玩家打字触发还是游戏内事件主动触发，全部记入 L1 上下文！
+            if (memMgr != null && !reply.startsWith("【")) {
+                memMgr.recordChatTurn(historyRecordText, reply);
             }
             return reply;
         });
+    }
+
+    /**
+     * 兼容简便调用（同样自动走 L1 多轮上下文记忆！）
+     */
+    public static CompletableFuture<String> chatSimpleAsync(String userQuestion) {
+        return chatWithMemoryAsync(userQuestion, userQuestion, "");
     }
 
     /**
@@ -154,10 +148,10 @@ public class LlmClient {
             String rawUserText,
             String assembledUserPrompt,
             String jpegBase64,
-            String memoryContextBlock) {
+            String dynamicSystemAddons) {
 
         if (jpegBase64 == null || jpegBase64.isBlank()) {
-            return chatWithMemoryAsync(rawUserText, assembledUserPrompt, memoryContextBlock);
+            return chatWithMemoryAsync(rawUserText, assembledUserPrompt, dynamicSystemAddons);
         }
 
         CompanionConfig config = CompanionConfig.get();
@@ -165,7 +159,6 @@ public class LlmClient {
             return CompletableFuture.completedFuture("【提示】未配置 API Key 喵！请按 K 键打开配置中心填入您的大模型密钥。");
         }
 
-        // 确定使用独立视觉模型还是主模型
         String targetBaseUrl = (config.enableVisionModel && config.visionBaseUrl != null && !config.visionBaseUrl.isBlank())
                 ? config.visionBaseUrl : config.baseUrl;
         String targetModel = (config.enableVisionModel && config.visionModelName != null && !config.visionModelName.isBlank())
@@ -173,17 +166,16 @@ public class LlmClient {
 
         JsonObject requestBody = new JsonObject();
         requestBody.addProperty("model", targetModel);
-        requestBody.addProperty("temperature", 0.7);
+        requestBody.addProperty("temperature", 0.8);
 
         JsonArray msgArray = new JsonArray();
 
-        // 1. System Prompt + 记忆块
         StringBuilder sysBuilder = new StringBuilder();
         if (config.systemPrompt != null && !config.systemPrompt.isBlank()) {
             sysBuilder.append(config.systemPrompt).append("\n\n");
         }
-        if (memoryContextBlock != null && !memoryContextBlock.isBlank()) {
-            sysBuilder.append(memoryContextBlock);
+        if (dynamicSystemAddons != null && !dynamicSystemAddons.isBlank()) {
+            sysBuilder.append(dynamicSystemAddons);
         }
         if (!sysBuilder.isEmpty()) {
             JsonObject sysMsg = new JsonObject();
@@ -192,7 +184,17 @@ public class LlmClient {
             msgArray.add(sysMsg);
         }
 
-        // 2. 多模态 User 消息 (Text + Image Base64)
+        // 注入最近上下文
+        LocalMemoryManager memMgr = LocalMemoryManager.getCurrent();
+        if (memMgr != null) {
+            for (ChatMessage historyMsg : memMgr.getRecentChatHistory()) {
+                JsonObject hm = new JsonObject();
+                hm.addProperty("role", historyMsg.role());
+                hm.addProperty("content", historyMsg.content());
+                msgArray.add(hm);
+            }
+        }
+
         JsonObject userMsg = new JsonObject();
         userMsg.addProperty("role", "user");
         JsonArray contentArr = new JsonArray();
@@ -225,16 +227,14 @@ public class LlmClient {
                 .thenCompose(response -> {
                     if (response.statusCode() == 200) {
                         String reply = parseAssistantReply(response.body());
-                        LocalMemoryManager memMgr = LocalMemoryManager.getCurrent();
-                        if (memMgr != null && rawUserText != null && !rawUserText.isBlank() && !reply.startsWith("【")) {
+                        if (memMgr != null && !reply.startsWith("【")) {
                             memMgr.recordChatTurn(rawUserText, reply);
                         }
                         return CompletableFuture.completedFuture(reply);
                     }
-                    // 若当前配置的是纯文本模型（如 deepseek-chat 不支持 image_url 返回 400/422），平滑降级为纯文本全息态势感知
-                    return chatWithMemoryAsync(rawUserText, assembledUserPrompt, memoryContextBlock);
+                    return chatWithMemoryAsync(rawUserText, assembledUserPrompt, dynamicSystemAddons);
                 })
-                .exceptionallyCompose(ex -> chatWithMemoryAsync(rawUserText, assembledUserPrompt, memoryContextBlock));
+                .exceptionallyCompose(ex -> chatWithMemoryAsync(rawUserText, assembledUserPrompt, dynamicSystemAddons));
     }
 
     /**
@@ -252,9 +252,6 @@ public class LlmClient {
         return base.endsWith("/chat/completions") ? base : base + "/chat/completions";
     }
 
-    /**
-     * 从 OpenAI 标准响应体提取 AI 回复正文
-     */
     private static String parseAssistantReply(String jsonResponse) {
         try {
             JsonObject json = JsonParser.parseString(jsonResponse).getAsJsonObject();

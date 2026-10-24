@@ -46,22 +46,22 @@ public class MineCompanionClient implements ClientModInitializer {
     private static KeyBinding visionLookKey;
     private static KeyBinding openConfigKey;
 
-    // 缓存玩家最新坐标与维度，供退出存档瞬间安全落盘使用
     private static String lastKnownDimension = "minecraft:overworld";
     private static long lastKnownGameDay = 0;
     private static int lastKnownX = 0, lastKnownY = 64, lastKnownZ = 0;
 
     @Override
     public void onInitializeClient() {
-        CLIENT_LOGGER.info("[{}] 客户端全栈陪伴系统（感知/记忆/百科/视觉/配置中心）正在初始化喵！(=^･ω･^=)", MineCompanionMod.MOD_NAME);
+        CLIENT_LOGGER.info("[{}] 客户端全栈陪伴系统正在初始化喵！(=^･ω･^=)", MineCompanionMod.MOD_NAME);
 
-        // 1. 初始化并加载本地配置文件与百科缓存 (.minecraft/config/minecompanion/)
+        // 1. 初始化并加载本地配置文件、默认记忆目录与百科缓存
         MinecraftClient client = MinecraftClient.getInstance();
         configDir = new File(client.runDirectory, "config/minecompanion");
         CompanionConfig.load(configDir);
+        LocalMemoryManager.setDefaultBaseConfigDir(configDir.toPath());
         WikiLookupService.initCache(configDir.toPath());
 
-        // 2. 🌟 注册三大核心快捷键：H 键(自省)、V 键(看图)、K 键(配置中心)
+        // 2. 注册三大核心快捷键：H 键(自省)、V 键(看图)、K 键(配置中心)
         inspectKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
                 "key.minecompanion.inspect",
                 InputUtil.Type.KEYSYM,
@@ -81,7 +81,7 @@ public class MineCompanionClient implements ClientModInitializer {
                 "category.minecompanion"
         ));
 
-        // 3. 🌟 监听玩家进入存档事件：加载存档专属三层记忆库 & 延迟 4 秒触发重逢问候
+        // 3. 监听玩家进入存档事件：加载存档专属三层记忆库 & 延迟 4 秒触发重逢问候
         ClientPlayConnectionEvents.JOIN.register((handler, sender, mcClient) -> {
             String worldId = resolveCurrentWorldId(mcClient);
             LocalMemoryManager.initForWorld(configDir.toPath(), worldId);
@@ -95,7 +95,7 @@ public class MineCompanionClient implements ClientModInitializer {
             }
         });
 
-        // 4. 🌟 监听玩家退出存档事件：毫秒级非阻塞保存 L1 对话、L2 离线时间与 L3 情景日记
+        // 4. 监听玩家退出存档事件：非阻塞保存 L1 对话、L2 离线时间与 L3 情景日记
         ClientPlayConnectionEvents.DISCONNECT.register((handler, mcClient) -> {
             LocalMemoryManager memMgr = LocalMemoryManager.getCurrent();
             if (memMgr != null) {
@@ -103,7 +103,7 @@ public class MineCompanionClient implements ClientModInitializer {
             }
         });
 
-        // 5. 🌟 客户端 Tick 循环：监听快捷键按下、更新坐标快照与运行主动发言调度器
+        // 5. 客户端 Tick 循环：监听快捷键按下、更新坐标快照与运行主动发言调度器
         ClientTickEvents.END_CLIENT_TICK.register(minecraftClient -> {
             if (minecraftClient.player != null && minecraftClient.world != null) {
                 lastKnownDimension = minecraftClient.world.getRegistryKey().getValue().toString();
@@ -117,17 +117,16 @@ public class MineCompanionClient implements ClientModInitializer {
                 handleQuickInspect();
             }
             while (visionLookKey.wasPressed()) {
-                handleVisionLookCommand("请看看我现在的游戏画面，点评一下我眼前的景象或建筑喵！");
+                handleVisionLookCommand("快看看我现在眼前的画面，你觉得怎么样？");
             }
             while (openConfigKey.wasPressed()) {
                 openConfigScreen();
             }
 
-            // 运行主动发言调度器（低血量报警 / 故地重游唤醒 / 静默闲聊）
             ProactiveScheduler.onClientTick(minecraftClient, MineCompanionClient::sendToChatHud);
         });
 
-        // 6. 🌟 监听原生聊天栏输入（免 /ai 自然语言自动唤醒）
+        // 6. 监听原生聊天栏输入（免 /ai 自然语言自动唤醒）
         ClientSendMessageEvents.CHAT.register((message) -> {
             reloadConfigQuietly();
             CompanionConfig config = CompanionConfig.get();
@@ -136,9 +135,8 @@ public class MineCompanionClient implements ClientModInitializer {
             }
         });
 
-        // 7. 注册斜杠指令集（/ai, /item, /target, /mods, /wiki, /remember, /memory, /look, /config）
+        // 7. 注册斜杠指令集
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {
-            // (1) /ai 聚合主指令
             dispatcher.register(ClientCommandManager.literal("ai")
                 .then(ClientCommandManager.literal("item").executes(c -> { handleInspectHandItem(); return 1; }))
                 .then(ClientCommandManager.literal("target").executes(c -> { handleInspectTarget(); return 1; }))
@@ -146,7 +144,7 @@ public class MineCompanionClient implements ClientModInitializer {
                 .then(ClientCommandManager.literal("memory").executes(c -> { handleShowMemorySummary(); return 1; }))
                 .then(ClientCommandManager.literal("config").executes(c -> { openConfigScreen(); return 1; }))
                 .then(ClientCommandManager.literal("look")
-                    .executes(c -> { handleVisionLookCommand("请看看我现在的游戏画面，点评一下我眼前的景象或建筑喵！"); return 1; })
+                    .executes(c -> { handleVisionLookCommand("快看看我现在眼前的画面，你觉得怎么样？"); return 1; })
                     .then(ClientCommandManager.argument("question", StringArgumentType.greedyString())
                         .executes(c -> {
                             handleVisionLookCommand(StringArgumentType.getString(c, "question"));
@@ -167,23 +165,20 @@ public class MineCompanionClient implements ClientModInitializer {
                 })
             );
 
-            // (2) 极简别名指令
             dispatcher.register(ClientCommandManager.literal("item").executes(c -> { handleInspectHandItem(); return 1; }));
             dispatcher.register(ClientCommandManager.literal("target").executes(c -> { handleInspectTarget(); return 1; }));
             dispatcher.register(ClientCommandManager.literal("mods").executes(c -> { handleListMods(); return 1; }));
             dispatcher.register(ClientCommandManager.literal("memory").executes(c -> { handleShowMemorySummary(); return 1; }));
             dispatcher.register(ClientCommandManager.literal("config").executes(c -> { openConfigScreen(); return 1; }));
 
-            // (3) /look [问题] 主动截屏让 AI 看画面
             dispatcher.register(ClientCommandManager.literal("look")
-                .executes(c -> { handleVisionLookCommand("请看看我现在的游戏画面，点评一下我眼前的景象或建筑喵！"); return 1; })
+                .executes(c -> { handleVisionLookCommand("快看看我现在眼前的画面，你觉得怎么样？"); return 1; })
                 .then(ClientCommandManager.argument("question", StringArgumentType.greedyString())
                     .executes(c -> {
                         handleVisionLookCommand(StringArgumentType.getString(c, "question"));
                         return 1;
                     })));
 
-            // (4) /wiki <关键词> 主动检索外部百科
             dispatcher.register(ClientCommandManager.literal("wiki")
                 .then(ClientCommandManager.argument("keyword", StringArgumentType.greedyString())
                     .executes(c -> {
@@ -192,7 +187,6 @@ public class MineCompanionClient implements ClientModInitializer {
                         return 1;
                     })));
 
-            // (5) /remember <地标名称> 标记当前位置为永久地标
             dispatcher.register(ClientCommandManager.literal("remember")
                 .then(ClientCommandManager.argument("name", StringArgumentType.greedyString())
                     .executes(c -> {
@@ -203,9 +197,6 @@ public class MineCompanionClient implements ClientModInitializer {
         });
     }
 
-    /**
-     * 打开《AI 伙伴控制中心》四页签可视化配置界面
-     */
     private static void openConfigScreen() {
         MinecraftClient client = MinecraftClient.getInstance();
         client.execute(() -> {
@@ -214,9 +205,6 @@ public class MineCompanionClient implements ClientModInitializer {
         });
     }
 
-    /**
-     * 获取当前存档唯一标识名称（实现不同存档记忆完全隔离）
-     */
     private static String resolveCurrentWorldId(MinecraftClient client) {
         if (client.getServer() != null && client.getServer().getSaveProperties() != null) {
             return client.getServer().getSaveProperties().getLevelName();
@@ -227,9 +215,6 @@ public class MineCompanionClient implements ClientModInitializer {
         return "default_world";
     }
 
-    /**
-     * 触发进入存档时的阶梯式久别重逢问候
-     */
     private static void triggerReEntryGreeting() {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null || client.world == null) return;
@@ -245,14 +230,11 @@ public class MineCompanionClient implements ClientModInitializer {
                 : "";
 
         ProactiveScheduler.recordInteraction();
-        LlmClient.chatWithMemoryAsync("", reEntryPrompt, memBlock).thenAccept(reply -> {
+        LlmClient.chatWithMemoryAsync("[事件：主人刚刚上线进入存档]", reEntryPrompt, snapshot + "\n" + memBlock).thenAccept(reply -> {
             sendToChatHud(ChatColorFormatter.formatAssistantReply(reply));
         });
     }
 
-    /**
-     * 按 H 键快捷自省：手中有物品则自省手持物，空手则自省面前目标
-     */
     private static void handleQuickInspect() {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null) return;
@@ -265,9 +247,6 @@ public class MineCompanionClient implements ClientModInitializer {
         }
     }
 
-    /**
-     * 按 V 键或输入 /look 触发 OpenGL 视觉截屏看图
-     */
     private static void handleVisionLookCommand(String userQuestion) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null) return;
@@ -284,62 +263,52 @@ public class MineCompanionClient implements ClientModInitializer {
                 ? memMgr.buildMemoryContextBlock(userQuestion, client.player.getBlockX(), client.player.getBlockZ())
                 : "";
 
-        String assembledPrompt = PerceptionRouter.assembleContextPrompt(
-                "[看] " + userQuestion, "", crosshairCard, "", stateSnapshot, "");
+        String sysAddons = PerceptionRouter.assembleDynamicSystemAddons(
+                PerceptionRouter.IntentType.VISION_LOOK, "", crosshairCard, "", stateSnapshot, "", memBlock);
 
         ScreenCapturer.captureScreenBase64Async().thenCompose(base64 ->
-                LlmClient.chatVisionAsync(userQuestion, assembledPrompt, base64, memBlock)
+                LlmClient.chatVisionAsync(userQuestion, userQuestion, base64, sysAddons)
         ).thenAccept(reply -> {
             sendToChatHud(ChatColorFormatter.formatAssistantReply(reply));
         });
     }
 
-    /**
-     * 自省手持物品并让 AI 讲解用法
-     */
     private static void handleInspectHandItem() {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null) return;
 
         ItemStack hand = client.player.getMainHandStack();
         String itemCard = ModIntrospector.inspectItemStack(hand);
-        sendToChatHud("§7[你] §f让小爱看一眼我手里的东西...");
-        sendToChatHud("§7§o* [小爱] 正在翻看游戏注册表与配方库... *§r");
+        String snapshot = StateSnapshotter.takeSnapshot();
+        sendToChatHud("§7[你] §f哎，你看我手里拿的这个是什么？怎么用呀？");
+        sendToChatHud("§7§o* [小爱] 正在凑过来瞧你手里的东西... *§r");
 
-        String prompt = "我手里正拿着这件物品，请根据以下游戏内自省名片，以你的活泼伙伴口吻为我简要介绍它的所属模组、用途和合成关键：\n\n" + itemCard;
         reloadConfigQuietly();
         ProactiveScheduler.recordInteraction();
-        LlmClient.chatSimpleAsync(prompt).thenAccept(reply -> {
+        String userQ = "你看我手里正拿着的这个东西是什么？怎么合或者有什么用呀？（像平时聊天一样自然告诉我，别背说明书格式）";
+        LlmClient.chatWithMemoryAsync("我手里拿的这个是什么？", userQ, snapshot + "\n" + itemCard).thenAccept(reply -> {
             sendToChatHud(ChatColorFormatter.formatAssistantReply(reply));
         });
     }
 
-    /**
-     * 自省准星注视的目标
-     */
     private static void handleInspectTarget() {
         String targetCard = ModIntrospector.inspectCrosshairTarget();
-        sendToChatHud("§7[你] §f让小爱看一眼我正在注视的东西...");
-        sendToChatHud("§7§o* [小爱] 正在聚焦视线分析目标... *§r");
+        String snapshot = StateSnapshotter.takeSnapshot();
+        sendToChatHud("§7[你] §f你看我前面正盯着的是什么呀？");
+        sendToChatHud("§7§o* [小爱] 正在顺着你的目光往前看... *§r");
 
-        String prompt = "我正看着前面的目标，请根据以下视线焦点数据，为我介绍这是什么、属于哪个模组以及有什么注意事项：\n\n" + targetCard;
         reloadConfigQuietly();
         ProactiveScheduler.recordInteraction();
-        LlmClient.chatSimpleAsync(prompt).thenAccept(reply -> {
+        String userQ = "你看我面前正盯着的目标是什么呀？（像真朋友聊天一样自然告诉我，别列死板格式）";
+        LlmClient.chatWithMemoryAsync("你看我面前盯着的是什么？", userQ, snapshot + "\n" + targetCard).thenAccept(reply -> {
             sendToChatHud(ChatColorFormatter.formatAssistantReply(reply));
         });
     }
 
-    /**
-     * 一键列出模组清单
-     */
     private static void handleListMods() {
         sendToChatHud("§b[小爱] §f" + ModIntrospector.getInstalledModsSummary());
     }
 
-    /**
-     * 查看当前存档已记住的地标与约定摘要 (/memory)
-     */
     private static void handleShowMemorySummary() {
         LocalMemoryManager memMgr = LocalMemoryManager.getCurrent();
         if (memMgr == null) {
@@ -348,7 +317,7 @@ public class MineCompanionClient implements ClientModInitializer {
         }
         LocalMemoryManager.CoreMemoryDoc doc = memMgr.getCoreMemory();
         sendToChatHud("§e====== 【小爱的当前存档核心记忆 (L2)】 ======");
-        sendToChatHud("§7- 最近活动摘要：§f" + (doc.lastLogoutSummary.isEmpty() ? "初次探索中" : doc.lastLogoutSummary));
+        sendToChatHud("§7- 最近互动记录：§f" + (doc.lastLogoutSummary.isEmpty() ? "初次探索中" : doc.lastLogoutSummary));
         sendToChatHud("§7- 共同约定事项：§f" + (doc.activePromises.isEmpty() ? "暂无约定（可在聊天中说“记住我们约定...”）" : String.join("；", doc.activePromises)));
         if (doc.landmarks.isEmpty()) {
             sendToChatHud("§7- 已标记地标：§f暂无（可输入 §b/remember 基地 §f或说“记住这里叫基地”）");
@@ -361,9 +330,6 @@ public class MineCompanionClient implements ClientModInitializer {
         }
     }
 
-    /**
-     * 标记当前位置为永久地标
-     */
     private static void handleSaveLandmark(String landmarkName, String note) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null || client.world == null) return;
@@ -379,17 +345,15 @@ public class MineCompanionClient implements ClientModInitializer {
         }
     }
 
-    /**
-     * 主动查询外部百科 (/wiki <关键词>)
-     */
     private static void handleWikiSearchCommand(String keyword) {
         sendToChatHud("§7[你] §f请小爱帮我查一下百科：" + keyword);
         sendToChatHud("§7§o* [小爱] 正在翻阅 MC百科与中文 Wiki 资料库... *§r");
         ProactiveScheduler.recordInteraction();
 
+        String snapshot = StateSnapshotter.takeSnapshot();
         WikiLookupService.searchWikiAsync(keyword).thenCompose(wikiSnippet -> {
-            String prompt = "主人想了解关于「" + keyword + "」的百科资料或攻略。请结合以下检索到的百科摘要，用你活泼贴心的伙伴语气为主人提炼重点讲解（控制在 110 字以内）：\n\n" + wikiSnippet;
-            return LlmClient.chatSimpleAsync(prompt);
+            String userQ = "我想了解关于「" + keyword + "」的玩法或攻略，你刚查完百科，快用你平时的口语重点跟我讲讲吧！";
+            return LlmClient.chatWithMemoryAsync("帮我查一下：" + keyword, userQ, snapshot + "\n" + wikiSnippet);
         }).thenAccept(reply -> {
             sendToChatHud(ChatColorFormatter.formatAssistantReply(reply));
         });
@@ -404,7 +368,6 @@ public class MineCompanionClient implements ClientModInitializer {
 
         PerceptionRouter.IntentType intent = PerceptionRouter.classifyIntent(userMessage);
 
-        // 若玩家在聊天栏用自然语言说“记住这里叫樱花木屋”，直接镌刻空间地标
         if (intent == PerceptionRouter.IntentType.SAVE_LANDMARK && client.player != null && client.world != null) {
             String lmName = PerceptionRouter.extractLandmarkName(userMessage);
             CompletableFuture.runAsync(() -> {
@@ -413,7 +376,6 @@ public class MineCompanionClient implements ClientModInitializer {
             return;
         }
 
-        // 若玩家在聊天栏用自然语言立下约定“记住我们约定明天去屠龙”
         if (intent == PerceptionRouter.IntentType.SAVE_PROMISE) {
             LocalMemoryManager memMgr = LocalMemoryManager.getCurrent();
             if (memMgr != null) {
@@ -425,7 +387,6 @@ public class MineCompanionClient implements ClientModInitializer {
             sendToChatHud("§7[你] §f" + userMessage);
             sendToChatHud("§7§o* [小爱] 正在歪着头思考中... *§r");
         } else {
-            // 微延时 100ms 弹出思考提示，确保排在玩家自身消息下方
             String thinkingTip;
             if (intent == PerceptionRouter.IntentType.WIKI_LOOKUP) {
                 thinkingTip = "§7§o* [小爱] 正在快速翻阅外部百科与配方资料... *§r";
@@ -439,7 +400,6 @@ public class MineCompanionClient implements ClientModInitializer {
             }, CompletableFuture.delayedExecutor(100, TimeUnit.MILLISECONDS));
         }
 
-        // 提取手持、准星、模组列表与实时生存态势
         ItemStack hand = (client.player != null) ? client.player.getMainHandStack() : ItemStack.EMPTY;
         String handName = hand.isEmpty() ? "" : hand.getName().getString();
         String handCard = ModIntrospector.inspectItemStack(hand);
@@ -447,7 +407,6 @@ public class MineCompanionClient implements ClientModInitializer {
         String modsSummary = ModIntrospector.getInstalledModsSummary();
         String stateSnapshot = StateSnapshotter.takeSnapshot();
 
-        // 提取当前存档的 L2 核心档案 + L3 关联情景日记
         LocalMemoryManager memMgr = LocalMemoryManager.getCurrent();
         int px = (client.player != null) ? client.player.getBlockX() : 0;
         int pz = (client.player != null) ? client.player.getBlockZ() : 0;
@@ -461,31 +420,31 @@ public class MineCompanionClient implements ClientModInitializer {
         if (intent == PerceptionRouter.IntentType.WIKI_LOOKUP) {
             String wikiKeyword = PerceptionRouter.extractWikiKeyword(userMessage, handName, "");
             WikiLookupService.searchWikiAsync(wikiKeyword).thenCompose(wikiSnippet -> {
-                String assembledPrompt = PerceptionRouter.assembleContextPrompt(
-                        userMessage, handCard, crosshairCard, modsSummary, stateSnapshot, wikiSnippet);
-                return LlmClient.chatWithMemoryAsync(userMessage, assembledPrompt, memoryContextBlock);
+                String sysAddons = PerceptionRouter.assembleDynamicSystemAddons(
+                        intent, handCard, crosshairCard, modsSummary, stateSnapshot, wikiSnippet, memoryContextBlock);
+                return LlmClient.chatWithMemoryAsync(userMessage, userMessage, sysAddons);
             }).thenAccept(reply -> {
                 sendToChatHud(ChatColorFormatter.formatAssistantReply(reply));
             });
             return;
         }
 
-        // 分支 2：触发视觉看图意图（如“看看我建的房子好看吗”）
+        // 分支 2：触发视觉看图意图
         if (intent == PerceptionRouter.IntentType.VISION_LOOK) {
-            String assembledPrompt = PerceptionRouter.assembleContextPrompt(
-                    userMessage, handCard, crosshairCard, modsSummary, stateSnapshot, "");
+            String sysAddons = PerceptionRouter.assembleDynamicSystemAddons(
+                    intent, handCard, crosshairCard, modsSummary, stateSnapshot, "", memoryContextBlock);
             ScreenCapturer.captureScreenBase64Async().thenCompose(base64 ->
-                    LlmClient.chatVisionAsync(userMessage, assembledPrompt, base64, memoryContextBlock)
+                    LlmClient.chatVisionAsync(userMessage, userMessage, base64, sysAddons)
             ).thenAccept(reply -> {
                 sendToChatHud(ChatColorFormatter.formatAssistantReply(reply));
             });
             return;
         }
 
-        // 分支 3：常规多维态势感知对话
-        String assembledPrompt = PerceptionRouter.assembleContextPrompt(
-                userMessage, handCard, crosshairCard, modsSummary, stateSnapshot, "");
-        LlmClient.chatWithMemoryAsync(userMessage, assembledPrompt, memoryContextBlock).thenAccept(reply -> {
+        // 分支 3：常规对话与自省意图（User 消息保持纯粹原话，环境与背包真实状态注入 System）
+        String sysAddons = PerceptionRouter.assembleDynamicSystemAddons(
+                intent, handCard, crosshairCard, modsSummary, stateSnapshot, "", memoryContextBlock);
+        LlmClient.chatWithMemoryAsync(userMessage, userMessage, sysAddons).thenAccept(reply -> {
             sendToChatHud(ChatColorFormatter.formatAssistantReply(reply));
         });
     }

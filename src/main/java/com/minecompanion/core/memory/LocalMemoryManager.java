@@ -23,16 +23,16 @@ import java.util.stream.Collectors;
 
 /**
  * 本地持久化三层记忆管理器 (LocalMemoryManager)
- * 借鉴“结构化小文档 + 只追加日志”落盘哲学，零外部数据库依赖实现：
- * - L1 短期工作记忆 (recent_session_context.json): 保存最近 16 条对话滑动窗口，实现多轮上下文连贯与重进无缝续聊
+ * - L1 短期工作记忆 (recent_session_context.json): 保存最近 24 条对话与事件滑动窗口，确保玩家聊天与 AI 主动发言上下文 100% 紧密衔接
  * - L2 核心档案记忆 (core_memory.json): 常驻保存基地地标坐标、共同约定、玩家偏好与上次离线时间戳
  * - L3 历史情景日记 (episodic_log.jsonl): 只追加写入的历史共同经历摘要，支持关键词与空间坐标双重检索
  */
 public class LocalMemoryManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Gson COMPACT_GSON = new Gson();
-    private static final int MAX_L1_MESSAGES = 16;
+    private static final int MAX_L1_MESSAGES = 24;
 
+    private static Path defaultBaseConfigDir;
     private static LocalMemoryManager currentInstance;
 
     private final Path worldMemoryDir;
@@ -42,7 +42,6 @@ public class LocalMemoryManager {
 
     private CoreMemoryDoc coreMemory;
     private final List<LlmClient.ChatMessage> l1WorkingMemory = new ArrayList<>();
-    // 记录地标触发冷却，防止玩家在基地里走动时反复触发“故地重游”
     private final Map<String, Long> landmarkTriggerCooldowns = new HashMap<>();
 
     public LocalMemoryManager(Path baseConfigDir, String worldIdentifier) {
@@ -54,11 +53,19 @@ public class LocalMemoryManager {
         loadOrInitAll();
     }
 
+    public static synchronized void setDefaultBaseConfigDir(Path baseConfigDir) {
+        defaultBaseConfigDir = baseConfigDir;
+    }
+
     public static synchronized void initForWorld(Path baseConfigDir, String worldIdentifier) {
+        defaultBaseConfigDir = baseConfigDir;
         currentInstance = new LocalMemoryManager(baseConfigDir, worldIdentifier);
     }
 
     public static synchronized LocalMemoryManager getCurrent() {
+        if (currentInstance == null && defaultBaseConfigDir != null) {
+            currentInstance = new LocalMemoryManager(defaultBaseConfigDir, "default_world");
+        }
         return currentInstance;
     }
 
@@ -99,16 +106,36 @@ public class LocalMemoryManager {
     }
 
     /**
-     * 向 L1 短期记忆滑动窗口追加一轮对话
+     * 向 L1 短期记忆滑动窗口追加一轮对话（无论是玩家主动发话还是游戏事件触发 AI 主动开口，均完整记录以保持上下文连贯）
      */
-    public synchronized void recordChatTurn(String userText, String assistantReply) {
-        l1WorkingMemory.add(new LlmClient.ChatMessage("user", userText));
+    public synchronized void recordChatTurn(String userOrEventText, String assistantReply) {
+        String effectiveUserMsg = (userOrEventText == null || userOrEventText.isBlank())
+                ? "（玩家正在安静生存中）" : userOrEventText;
+        l1WorkingMemory.add(new LlmClient.ChatMessage("user", effectiveUserMsg));
         l1WorkingMemory.add(new LlmClient.ChatMessage("assistant", assistantReply));
         while (l1WorkingMemory.size() > MAX_L1_MESSAGES) {
             l1WorkingMemory.remove(0);
         }
-        // 更新最后一次互动的简要记录
-        this.coreMemory.lastLogoutSummary = "与主人聊了关于「" + truncate(userText, 25) + "」的话题";
+        this.coreMemory.lastLogoutSummary = "刚聊过：「" + truncate(effectiveUserMsg, 24) + " -> " + truncate(assistantReply, 28) + "」";
+        saveRecentContext();
+    }
+
+    /**
+     * 记录玩家死亡事件到核心记忆与情景日记
+     */
+    public synchronized void recordDeathEvent(long gameDay, String dimension, int x, int y, int z, String deathDesc) {
+        String summary = String.format("在 %s (坐标 X:%d, Y:%d, Z:%d) 不幸阵亡：%s", dimension, x, y, z, deathDesc);
+        this.coreMemory.lastLogoutSummary = summary;
+        saveCoreMemory();
+
+        EpisodicEntry entry = new EpisodicEntry();
+        entry.ts = Instant.now().toString();
+        entry.gameDay = gameDay;
+        entry.dim = dimension;
+        entry.pos = new int[]{x, y, z};
+        entry.tags = List.of("角色死亡", "掉装备点", dimension);
+        entry.summary = summary;
+        appendEpisodicEntry(entry);
     }
 
     /**
@@ -154,7 +181,6 @@ public class LocalMemoryManager {
         saveCoreMemory();
         saveRecentContext();
 
-        // 若本次会话有过聊天互动，则向 L3 情景日记追加一条会话记录
         if (!l1WorkingMemory.isEmpty()) {
             EpisodicEntry entry = new EpisodicEntry();
             entry.ts = Instant.now().toString();
@@ -184,14 +210,13 @@ public class LocalMemoryManager {
         this.coreMemory.landmarks.add(lm);
         saveCoreMemory();
 
-        // 同步记入 L3 情景日记
         EpisodicEntry entry = new EpisodicEntry();
         entry.ts = Instant.now().toString();
         entry.gameDay = this.coreMemory.lastPlayedGameDay;
         entry.dim = dimension;
         entry.pos = new int[]{x, y, z};
         entry.tags = List.of("地标建立", name);
-        entry.summary = String.format("与主人共同标记了重要地点【%s】(坐标 X:%d, Y:%d, Z:%d)：%s", name, x, y, z, description);
+        entry.summary = String.format("共同标记了重要地点【%s】(坐标 X:%d, Y:%d, Z:%d)：%s", name, x, y, z, description);
         appendEpisodicEntry(entry);
     }
 
@@ -314,7 +339,6 @@ public class LocalMemoryManager {
             sb.append("- 已标记重要地标: ").append(lmStr).append("\n");
         }
 
-        // 动态检索 L3 历史日记
         List<EpisodicEntry> relatedLogs = retrieveRelevantMemories(userQuery, playerX, playerZ, 3);
         if (!relatedLogs.isEmpty()) {
             sb.append("【唤醒的历史情景日记 (L3)】\n");

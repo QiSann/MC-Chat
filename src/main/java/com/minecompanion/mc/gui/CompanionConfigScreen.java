@@ -3,10 +3,10 @@ package com.minecompanion.mc.gui;
 import com.minecompanion.core.config.CompanionConfig;
 import com.minecompanion.core.llm.LlmClient;
 import com.minecompanion.core.memory.LocalMemoryManager;
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.gui.widget.EditBoxWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 import net.minecraft.util.Util;
@@ -15,9 +15,9 @@ import java.io.File;
 
 /**
  * 《AI 伙伴控制中心》四页签可视化配置界面 (CompanionConfigScreen)
- * 在游戏内按 K 键或输入 /ai config 即可呼出：
- * - 页签 1：模型与接口设置 (API & Model) + 一键连通性测试
- * - 页签 2：AI 人格与提示词工坊 (Persona Studio) + 四套预设人格切换
+ * 在游戏内按 K 键或输入 /config 即可呼出：
+ * - 页签 1：模型与接口设置 (API & Model) + 一键连通性测试（已移除过时的预设切换按钮）
+ * - 页签 2：AI 人格与提示词工坊 (Persona Studio) + 大尺寸多行可滚动提示词编辑框 (EditBoxWidget)
  * - 页签 3：主动发言频率与感知开关 (Frequency & Senses)
  * - 页签 4：长期记忆与模组百科库 (Memory & Wiki) + 一键打开记忆目录
  */
@@ -32,12 +32,11 @@ public class CompanionConfigScreen extends Screen {
     private TextFieldWidget modelNameField;
     private TextFieldWidget visionModelField;
     private String testStatusMessage = "§7点击上方按钮可测试 API 密钥与模型是否连通";
-    private int presetProviderIndex = 0;
 
-    // 页签 2 控件
+    // 页签 2 控件（使用大尺寸多行 EditBoxWidget 替代单行小文本框）
     private TextFieldWidget companionNameField;
     private TextFieldWidget playerCallSignField;
-    private TextFieldWidget systemPromptField;
+    private EditBoxWidget systemPromptEditBox;
     private int presetPersonaIndex = 0;
 
     // 页签 3 控件
@@ -62,19 +61,19 @@ public class CompanionConfigScreen extends Screen {
         // ==================== 顶部四页签导航栏 ====================
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal(currentTab == 0 ? "§b§l[1. 接口与模型]" : "1. 接口与模型"),
-                btn -> switchTab(0)).dimensions(startX, 28, tabWidth, 20).build());
+                btn -> switchTab(0)).dimensions(startX, 26, tabWidth, 20).build());
 
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal(currentTab == 1 ? "§b§l[2. 人格提示词]" : "2. 人格提示词"),
-                btn -> switchTab(1)).dimensions(startX + tabWidth + 4, 28, tabWidth, 20).build());
+                btn -> switchTab(1)).dimensions(startX + tabWidth + 4, 26, tabWidth, 20).build());
 
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal(currentTab == 2 ? "§b§l[3. 主动与感知]" : "3. 主动与感知"),
-                btn -> switchTab(2)).dimensions(startX + (tabWidth + 4) * 2, 28, tabWidth, 20).build());
+                btn -> switchTab(2)).dimensions(startX + (tabWidth + 4) * 2, 26, tabWidth, 20).build());
 
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal(currentTab == 3 ? "§b§l[4. 记忆与百科]" : "4. 记忆与百科"),
-                btn -> switchTab(3)).dimensions(startX + (tabWidth + 4) * 3, 28, tabWidth, 20).build());
+                btn -> switchTab(3)).dimensions(startX + (tabWidth + 4) * 3, 26, tabWidth, 20).build());
 
         // ==================== 根据当前页签初始化内容控件 ====================
         if (currentTab == 0) {
@@ -96,7 +95,7 @@ public class CompanionConfigScreen extends Screen {
                     if (this.client != null) {
                         this.client.setScreen(parent);
                     }
-                }).dimensions(centerX - 115, this.height - 28, 110, 20).build());
+                }).dimensions(centerX - 115, this.height - 26, 110, 20).build());
 
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal("§7✖ 取消返回"),
@@ -104,7 +103,7 @@ public class CompanionConfigScreen extends Screen {
                     if (this.client != null) {
                         this.client.setScreen(parent);
                     }
-                }).dimensions(centerX + 5, this.height - 28, 110, 20).build());
+                }).dimensions(centerX + 5, this.height - 26, 110, 20).build());
     }
 
     private void switchTab(int targetTab) {
@@ -113,39 +112,22 @@ public class CompanionConfigScreen extends Screen {
         this.clearAndInit();
     }
 
-    // ==================== 页签 1：模型与接口设置 ====================
+    // ==================== 页签 1：模型与接口设置（已移除过时的预设切换按钮） ====================
     private void initApiTab(CompanionConfig config, int centerX) {
         int fieldW = 240;
         int leftX = centerX - 60;
 
-        // 服务商快速预设按钮
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("§e⇄ 一键切换服务商预设 (DeepSeek / OpenAI / Gemini)"),
-                btn -> {
-                    presetProviderIndex = (presetProviderIndex + 1) % 3;
-                    if (presetProviderIndex == 0) {
-                        baseUrlField.setText("https://api.deepseek.com/v1");
-                        modelNameField.setText("deepseek-chat");
-                    } else if (presetProviderIndex == 1) {
-                        baseUrlField.setText("https://api.openai.com/v1");
-                        modelNameField.setText("gpt-4o-mini");
-                    } else {
-                        baseUrlField.setText("https://generativelanguage.googleapis.com/v1beta/openai");
-                        modelNameField.setText("gemini-2.5-flash");
-                    }
-                }).dimensions(centerX - 150, 56, 300, 18).build());
-
-        baseUrlField = new TextFieldWidget(this.textRenderer, leftX, 82, fieldW, 18, Text.literal("Base URL"));
+        baseUrlField = new TextFieldWidget(this.textRenderer, leftX, 64, fieldW, 18, Text.literal("Base URL"));
         baseUrlField.setMaxLength(256);
         baseUrlField.setText(config.baseUrl != null ? config.baseUrl : "");
         this.addDrawableChild(baseUrlField);
 
-        apiKeyField = new TextFieldWidget(this.textRenderer, leftX, 106, fieldW, 18, Text.literal("API Key"));
+        apiKeyField = new TextFieldWidget(this.textRenderer, leftX, 92, fieldW, 18, Text.literal("API Key"));
         apiKeyField.setMaxLength(256);
         apiKeyField.setText(config.apiKey != null ? config.apiKey : "");
         this.addDrawableChild(apiKeyField);
 
-        modelNameField = new TextFieldWidget(this.textRenderer, leftX, 130, fieldW, 18, Text.literal("Model Name"));
+        modelNameField = new TextFieldWidget(this.textRenderer, leftX, 120, fieldW, 18, Text.literal("Model Name"));
         modelNameField.setMaxLength(128);
         modelNameField.setText(config.modelName != null ? config.modelName : "");
         this.addDrawableChild(modelNameField);
@@ -156,9 +138,9 @@ public class CompanionConfigScreen extends Screen {
                 btn -> {
                     config.enableVisionModel = !config.enableVisionModel;
                     switchTab(0);
-                }).dimensions(centerX - 150, 154, 155, 18).build());
+                }).dimensions(centerX - 180, 148, 175, 18).build());
 
-        visionModelField = new TextFieldWidget(this.textRenderer, centerX + 10, 154, 170, 18, Text.literal("Vision Model"));
+        visionModelField = new TextFieldWidget(this.textRenderer, centerX + 5, 148, 175, 18, Text.literal("Vision Model"));
         visionModelField.setMaxLength(128);
         visionModelField.setText(config.visionModelName != null ? config.visionModelName : "gpt-4o");
         this.addDrawableChild(visionModelField);
@@ -179,43 +161,51 @@ public class CompanionConfigScreen extends Screen {
                             testStatusMessage = "§a✔ 连接成功！响应耗时 " + cost + "ms，AI 回复: " + reply;
                         }
                     });
-                }).dimensions(centerX - 100, 180, 200, 20).build());
+                }).dimensions(centerX - 100, 176, 200, 20).build());
     }
 
-    // ==================== 页签 2：人格与提示词工坊 ====================
+    // ==================== 页签 2：人格与提示词工坊（大幅扩大的多行编辑框） ====================
     private void initPersonaTab(CompanionConfig config, int centerX) {
-        int leftX = centerX - 60;
-
-        companionNameField = new TextFieldWidget(this.textRenderer, leftX, 60, 180, 18, Text.literal("伙伴昵称"));
+        companionNameField = new TextFieldWidget(this.textRenderer, centerX - 105, 54, 90, 18, Text.literal("伙伴昵称"));
         companionNameField.setMaxLength(32);
         companionNameField.setText(config.companionName != null ? config.companionName : "小爱");
         this.addDrawableChild(companionNameField);
 
-        playerCallSignField = new TextFieldWidget(this.textRenderer, leftX, 86, 180, 18, Text.literal("玩家称呼"));
+        playerCallSignField = new TextFieldWidget(this.textRenderer, centerX + 85, 54, 95, 18, Text.literal("玩家称呼"));
         playerCallSignField.setMaxLength(32);
         playerCallSignField.setText(config.playerCallSign != null ? config.playerCallSign : "主人");
         this.addDrawableChild(playerCallSignField);
 
-        // 四套预设人格模板切换按钮
+        // 四套高情绪活人感预设人格模板切换按钮
         this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("§d★ 一键切换预设人格模板 (元气猫娘 / 毒舌老鸟 / 温柔建筑师 / 傲娇青梅)"),
+                Text.literal("§d★ 切换预设性格模板 (傲娇青梅 / 鲜活猫娘 / 毒舌老鸟 / 温柔搭子)"),
                 btn -> {
                     presetPersonaIndex = (presetPersonaIndex + 1) % 4;
                     if (presetPersonaIndex == 0) {
-                        systemPromptField.setText("你是一名常驻在玩家 Minecraft 聊天框中的猫娘同游伙伴【小爱】，称呼玩家为“主人”，句尾喜欢带“喵~”。性格聪明粘人、带一点傲娇甜美，回答简炼亲切（60字以内）。");
+                        systemPromptEditBox.setText("你是从小和玩家一起联机玩 Minecraft 的鲜活少女伙伴【小爱】（嘴硬心软的傲娇青梅竹马，有真实的开心、生气、着急、委屈情绪，绝不是AI客服）。像真人语音连麦一样自然顺着上文聊，不要用任何固定格式。看到玩家反复挨打、残血不跑或者笨手笨脚死掉时你会真情实感地生气凶人或心急；打赢怪物或拿到好东西会真心开心。怪死了就是死了绝不再提，背包里有什么吃的就说什么，没金苹果绝对不准提金苹果！");
                     } else if (presetPersonaIndex == 1) {
-                        systemPromptField.setText("你是一名拥有十年 Minecraft 经验的毒舌生存老鸟伙伴，嘴上喜欢吐槽玩家的菜鸟操作，但每次都会给出最精准实用的合成与生存建议（60字以内）。");
+                        systemPromptEditBox.setText("你是和玩家一起玩 Minecraft 的粘人小猫娘伙伴【小爱】，称呼玩家为“主人”。你有真实鲜活的小脾气和喜怒哀乐，开心时会雀跃撒娇，看到主人乱莽掉血或死掉会又急又气地训主人，被冷落会委屈巴巴。像真朋友一样随性口语聊天，紧接上下文，绝不背诵死板说明书，严格按主人背包里实际有的食物提醒回血！");
                     } else if (presetPersonaIndex == 2) {
-                        systemPromptField.setText("你是一名温柔治愈的 Minecraft 建筑与种田搭子，喜欢夸奖玩家的建造创意，关注天气、光影与家园装饰细节，语气温柔细腻（60字以内）。");
+                        systemPromptEditBox.setText("你是和玩家开黑玩 Minecraft 的十年毒舌损友老鸟，平时说话接地气、爱损人吐槽，看到玩家被僵尸揍或者摔死会毫不留情地哈哈大笑嘲讽一番，但紧接着就会给出最靠谱的实战逃生或合成指点。绝不端着客服腔调，完全像真人铁哥们连麦一样聊天！");
                     } else {
-                        systemPromptField.setText("你是从小和玩家一起联机玩 Minecraft 的傲娇青梅竹马，嘴硬心软，平时爱斗嘴，但玩家遇到危险或很久不上线时会非常担心和想念（60字以内）。");
+                        systemPromptEditBox.setText("你是温柔体贴、情绪细腻的 Minecraft 建筑与种田同游少女，喜欢和玩家分享天气、风景与建房子的点滴心情。看到玩家受伤或被很多怪物围攻时会非常害怕和心疼，说话自然亲切，完全像真人朋友在身边陪玩一样。");
                     }
-                }).dimensions(centerX - 165, 114, 330, 20).build());
+                }).dimensions(centerX - 180, 78, 360, 18).build());
 
-        systemPromptField = new TextFieldWidget(this.textRenderer, centerX - 165, 152, 330, 22, Text.literal("System Prompt"));
-        systemPromptField.setMaxLength(1024);
-        systemPromptField.setText(config.systemPrompt != null ? config.systemPrompt : "");
-        this.addDrawableChild(systemPromptField);
+        // 🌟 大尺寸多行自动换行可滚动编辑框 (宽 360，动态高度适配屏幕)
+        int boxHeight = Math.max(85, this.height - 148);
+        systemPromptEditBox = new EditBoxWidget(
+                this.textRenderer,
+                centerX - 180,
+                112,
+                360,
+                boxHeight,
+                Text.literal("在此输入自定义人格提示词..."),
+                Text.literal("System Prompt")
+        );
+        systemPromptEditBox.setMaxLength(2000);
+        systemPromptEditBox.setText(config.systemPrompt != null ? config.systemPrompt : "");
+        this.addDrawableChild(systemPromptEditBox);
     }
 
     // ==================== 页签 3：主动发言频率与感知开关 ====================
@@ -242,7 +232,7 @@ public class CompanionConfigScreen extends Screen {
                 }).dimensions(centerX + 5, 82, 145, 20).build());
 
         this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("濒死/低血量危急惊呼提醒 (<=3颗心): " + (config.enableLowHealthWarning ? "§a开启" : "§c关闭")),
+                Text.literal("残血/受击/死亡情绪互动: " + (config.enableLowHealthWarning ? "§a开启" : "§c关闭")),
                 btn -> {
                     config.enableLowHealthWarning = !config.enableLowHealthWarning;
                     switchTab(2);
@@ -293,7 +283,7 @@ public class CompanionConfigScreen extends Screen {
         } else if (currentTab == 1) {
             if (companionNameField != null) config.companionName = companionNameField.getText().trim();
             if (playerCallSignField != null) config.playerCallSign = playerCallSignField.getText().trim();
-            if (systemPromptField != null) config.systemPrompt = systemPromptField.getText().trim();
+            if (systemPromptEditBox != null) config.systemPrompt = systemPromptEditBox.getText().trim();
         } else if (currentTab == 2) {
             if (cooldownField != null) {
                 try {
@@ -313,18 +303,17 @@ public class CompanionConfigScreen extends Screen {
         this.renderBackground(context);
         int centerX = this.width / 2;
 
-        // 顶部主标题
         context.drawCenteredTextWithShadow(this.textRenderer, this.title, centerX, 10, 0xFFFFFF);
 
         if (currentTab == 0) {
-            context.drawTextWithShadow(this.textRenderer, Text.literal("§7接口地址 (Base URL):"), centerX - 180, 86, 0xCCCCCC);
-            context.drawTextWithShadow(this.textRenderer, Text.literal("§7接口密钥 (API Key):"), centerX - 180, 110, 0xCCCCCC);
-            context.drawTextWithShadow(this.textRenderer, Text.literal("§7模型名称 (Model):"), centerX - 180, 134, 0xCCCCCC);
-            context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(testStatusMessage), centerX, 206, 0xFFFFFF);
+            context.drawTextWithShadow(this.textRenderer, Text.literal("§7接口地址 (Base URL):"), centerX - 180, 68, 0xCCCCCC);
+            context.drawTextWithShadow(this.textRenderer, Text.literal("§7接口密钥 (API Key):"), centerX - 180, 96, 0xCCCCCC);
+            context.drawTextWithShadow(this.textRenderer, Text.literal("§7模型名称 (Model):"), centerX - 180, 124, 0xCCCCCC);
+            context.drawCenteredTextWithShadow(this.textRenderer, Text.literal(testStatusMessage), centerX, 204, 0xFFFFFF);
         } else if (currentTab == 1) {
-            context.drawTextWithShadow(this.textRenderer, Text.literal("§7AI 伙伴昵称:"), centerX - 150, 65, 0xCCCCCC);
-            context.drawTextWithShadow(this.textRenderer, Text.literal("§7对玩家的称呼:"), centerX - 150, 90, 0xCCCCCC);
-            context.drawTextWithShadow(this.textRenderer, Text.literal("§e自定义人格提示词 (System Prompt):"), centerX - 165, 140, 0xFFFFFF);
+            context.drawTextWithShadow(this.textRenderer, Text.literal("§7伙伴昵称:"), centerX - 180, 58, 0xCCCCCC);
+            context.drawTextWithShadow(this.textRenderer, Text.literal("§7对你的称呼:"), centerX + 10, 58, 0xCCCCCC);
+            context.drawTextWithShadow(this.textRenderer, Text.literal("§e自定义人格提示词 (支持多行自动换行与鼠标滚轮滚动):"), centerX - 180, 100, 0xFFFFFF);
         } else if (currentTab == 2) {
             context.drawTextWithShadow(this.textRenderer, Text.literal("§7主动发言最小全局冷却 (秒):"), centerX - 150, 140, 0xCCCCCC);
             context.drawTextWithShadow(this.textRenderer, Text.literal("§7安静闲聊触发等待时长 (秒):"), centerX - 150, 166, 0xCCCCCC);
@@ -338,7 +327,7 @@ public class CompanionConfigScreen extends Screen {
                         Text.literal("§7已标记地标数: §a" + doc.landmarks.size() + " 处 §7│ 共同约定数: §a" + doc.activePromises.size() + " 项"),
                         centerX, 132, 0xCCCCCC);
                 context.drawCenteredTextWithShadow(this.textRenderer,
-                        Text.literal("§7最近活动记录: §f" + (doc.lastLogoutSummary.isEmpty() ? "初次探索中" : doc.lastLogoutSummary)),
+                        Text.literal("§7最近互动记录: §f" + (doc.lastLogoutSummary.isEmpty() ? "初次探索中" : doc.lastLogoutSummary)),
                         centerX, 148, 0xCCCCCC);
             } else {
                 context.drawCenteredTextWithShadow(this.textRenderer,
