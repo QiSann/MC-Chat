@@ -3,6 +3,7 @@ package com.minecompanion.core.memory;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import com.minecompanion.core.config.CompanionConfig;
 import com.minecompanion.core.llm.LlmClient;
 
 import java.io.BufferedWriter;
@@ -23,14 +24,14 @@ import java.util.stream.Collectors;
 
 /**
  * 本地持久化三层记忆管理器 (LocalMemoryManager)
- * - L1 短期工作记忆 (recent_session_context.json): 保存最近 24 条对话与事件滑动窗口，确保玩家聊天与 AI 主动发言上下文 100% 紧密衔接
+ * - L1 短期工作记忆 (recent_session_context.json): 默认保存最近 80 条消息（40 轮完整对话），并在溢出时自动将旧对话归档至 L3 历史日记，绝不丢失回忆！
  * - L2 核心档案记忆 (core_memory.json): 常驻保存基地地标坐标、共同约定、玩家偏好与上次离线时间戳
  * - L3 历史情景日记 (episodic_log.jsonl): 只追加写入的历史共同经历摘要，支持关键词与空间坐标双重检索
  */
 public class LocalMemoryManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Gson COMPACT_GSON = new Gson();
-    private static final int MAX_L1_MESSAGES = 24;
+    private static final int DEFAULT_MAX_L1_MESSAGES = 80;
 
     private static Path defaultBaseConfigDir;
     private static LocalMemoryManager currentInstance;
@@ -75,7 +76,6 @@ public class LocalMemoryManager {
     public synchronized void loadOrInitAll() {
         try {
             Files.createDirectories(worldMemoryDir);
-            // 1. 加载 L2 核心记忆
             if (Files.exists(coreMemoryPath)) {
                 String json = Files.readString(coreMemoryPath, StandardCharsets.UTF_8);
                 this.coreMemory = GSON.fromJson(json, CoreMemoryDoc.class);
@@ -84,7 +84,6 @@ public class LocalMemoryManager {
                 this.coreMemory = new CoreMemoryDoc();
             }
 
-            // 2. 加载 L1 最近对话上下文
             l1WorkingMemory.clear();
             if (Files.exists(recentContextPath)) {
                 String json = Files.readString(recentContextPath, StandardCharsets.UTF_8);
@@ -105,17 +104,45 @@ public class LocalMemoryManager {
         return coreMemory;
     }
 
+    public synchronized int getL1MessageCount() {
+        return l1WorkingMemory.size();
+    }
+
     /**
-     * 向 L1 短期记忆滑动窗口追加一轮对话（无论是玩家主动发话还是游戏事件触发 AI 主动开口，均完整记录以保持上下文连贯）
+     * 向 L1 短期记忆滑动窗口追加一轮对话
+     * 当超过设定的窗口上限（默认 80 条 = 40 轮）时，自动将最早的 10 条对话合并归档至 L3 情景日记流，实现零遗忘！
      */
     public synchronized void recordChatTurn(String userOrEventText, String assistantReply) {
         String effectiveUserMsg = (userOrEventText == null || userOrEventText.isBlank())
                 ? "（玩家正在安静生存中）" : userOrEventText;
         l1WorkingMemory.add(new LlmClient.ChatMessage("user", effectiveUserMsg));
         l1WorkingMemory.add(new LlmClient.ChatMessage("assistant", assistantReply));
-        while (l1WorkingMemory.size() > MAX_L1_MESSAGES) {
-            l1WorkingMemory.remove(0);
+
+        int maxL1 = CompanionConfig.get().maxL1ContextMessages > 0
+                ? Math.max(20, CompanionConfig.get().maxL1ContextMessages)
+                : DEFAULT_MAX_L1_MESSAGES;
+
+        // 若超出滑动窗口上限，将最早的一批旧对话（最多 10 条）打包归档入 L3 历史情景日记，绝不白白丢弃
+        if (l1WorkingMemory.size() > maxL1) {
+            int archiveCount = Math.min(10, l1WorkingMemory.size() - maxL1 + 8);
+            List<String> archivedSnippets = new ArrayList<>();
+            for (int i = 0; i < archiveCount && !l1WorkingMemory.isEmpty(); i++) {
+                LlmClient.ChatMessage oldMsg = l1WorkingMemory.remove(0);
+                String prefix = "user".equals(oldMsg.role()) ? "主人:" : "小爱:";
+                archivedSnippets.add(prefix + truncate(oldMsg.content(), 30));
+            }
+            if (!archivedSnippets.isEmpty()) {
+                EpisodicEntry rolloverEntry = new EpisodicEntry();
+                rolloverEntry.ts = Instant.now().toString();
+                rolloverEntry.gameDay = this.coreMemory.lastPlayedGameDay;
+                rolloverEntry.dim = "minecraft:overworld";
+                rolloverEntry.pos = new int[]{0, 64, 0};
+                rolloverEntry.tags = List.of("历史对话归档");
+                rolloverEntry.summary = "过往对话回忆：" + String.join(" / ", archivedSnippets);
+                appendEpisodicEntry(rolloverEntry);
+            }
         }
+
         this.coreMemory.lastLogoutSummary = "刚聊过：「" + truncate(effectiveUserMsg, 24) + " -> " + truncate(assistantReply, 28) + "」";
         saveRecentContext();
     }

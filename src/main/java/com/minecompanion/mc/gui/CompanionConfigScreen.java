@@ -16,10 +16,10 @@ import java.io.File;
 /**
  * 《AI 伙伴控制中心》四页签可视化配置界面 (CompanionConfigScreen)
  * 在游戏内按 K 键或输入 /config 即可呼出：
- * - 页签 1：模型与接口设置 (API & Model) + 一键连通性测试（已移除过时的预设切换按钮）
+ * - 页签 1：模型与接口设置 (API & Model) + 一键连通性测试
  * - 页签 2：AI 人格与提示词工坊 (Persona Studio) + 大尺寸多行可滚动提示词编辑框 (EditBoxWidget)
  * - 页签 3：主动发言频率与感知开关 (Frequency & Senses)
- * - 页签 4：长期记忆与模组百科库 (Memory & Wiki) + 一键打开记忆目录
+ * - 页签 4：长期记忆与模组百科库 (Memory & Wiki) + L1 记忆容量调节 + 一键打开记忆目录
  */
 public class CompanionConfigScreen extends Screen {
     private final Screen parent;
@@ -33,7 +33,7 @@ public class CompanionConfigScreen extends Screen {
     private TextFieldWidget visionModelField;
     private String testStatusMessage = "§7点击上方按钮可测试 API 密钥与模型是否连通";
 
-    // 页签 2 控件（使用大尺寸多行 EditBoxWidget 替代单行小文本框）
+    // 页签 2 控件
     private TextFieldWidget companionNameField;
     private TextFieldWidget playerCallSignField;
     private EditBoxWidget systemPromptEditBox;
@@ -42,6 +42,9 @@ public class CompanionConfigScreen extends Screen {
     // 页签 3 控件
     private TextFieldWidget cooldownField;
     private TextFieldWidget idleChatField;
+
+    // 页签 4 控件
+    private TextFieldWidget maxL1MessagesField;
 
     public CompanionConfigScreen(Screen parent, File configDir) {
         super(Text.literal("§b✦ MineCompanion AI 伙伴控制中心 ✦"));
@@ -112,7 +115,7 @@ public class CompanionConfigScreen extends Screen {
         this.clearAndInit();
     }
 
-    // ==================== 页签 1：模型与接口设置（已移除过时的预设切换按钮） ====================
+    // ==================== 页签 1：模型与接口设置 ====================
     private void initApiTab(CompanionConfig config, int centerX) {
         int fieldW = 240;
         int leftX = centerX - 60;
@@ -132,7 +135,6 @@ public class CompanionConfigScreen extends Screen {
         modelNameField.setText(config.modelName != null ? config.modelName : "");
         this.addDrawableChild(modelNameField);
 
-        // 独立视觉模型开关
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal("独立视觉模型 (V键看图): " + (config.enableVisionModel ? "§a开启" : "§7关闭(自动降级)")),
                 btn -> {
@@ -145,7 +147,6 @@ public class CompanionConfigScreen extends Screen {
         visionModelField.setText(config.visionModelName != null ? config.visionModelName : "gpt-4o");
         this.addDrawableChild(visionModelField);
 
-        // 一键连通性测试按钮
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal("§b⚡ 一键测试 API 连通性"),
                 btn -> {
@@ -164,7 +165,7 @@ public class CompanionConfigScreen extends Screen {
                 }).dimensions(centerX - 100, 176, 200, 20).build());
     }
 
-    // ==================== 页签 2：人格与提示词工坊（大幅扩大的多行编辑框） ====================
+    // ==================== 页签 2：人格与提示词工坊 ====================
     private void initPersonaTab(CompanionConfig config, int centerX) {
         companionNameField = new TextFieldWidget(this.textRenderer, centerX - 105, 54, 90, 18, Text.literal("伙伴昵称"));
         companionNameField.setMaxLength(32);
@@ -176,7 +177,6 @@ public class CompanionConfigScreen extends Screen {
         playerCallSignField.setText(config.playerCallSign != null ? config.playerCallSign : "主人");
         this.addDrawableChild(playerCallSignField);
 
-        // 四套高情绪活人感预设人格模板切换按钮
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal("§d★ 切换预设性格模板 (傲娇青梅 / 鲜活猫娘 / 毒舌老鸟 / 温柔搭子)"),
                 btn -> {
@@ -192,7 +192,6 @@ public class CompanionConfigScreen extends Screen {
                     }
                 }).dimensions(centerX - 180, 78, 360, 18).build());
 
-        // 🌟 大尺寸多行自动换行可滚动编辑框 (宽 360，动态高度适配屏幕)
         int boxHeight = Math.max(85, this.height - 148);
         systemPromptEditBox = new EditBoxWidget(
                 this.textRenderer,
@@ -256,14 +255,19 @@ public class CompanionConfigScreen extends Screen {
                 btn -> {
                     config.enableLongTermMemory = !config.enableLongTermMemory;
                     switchTab(3);
-                }).dimensions(centerX - 150, 60, 300, 20).build());
+                }).dimensions(centerX - 150, 56, 300, 20).build());
 
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal("跨模组自主联网查百科 (Wiki/MC百科): " + (config.enableWikiLookup ? "§a开启" : "§c关闭")),
                 btn -> {
                     config.enableWikiLookup = !config.enableWikiLookup;
                     switchTab(3);
-                }).dimensions(centerX - 150, 86, 300, 20).build());
+                }).dimensions(centerX - 150, 80, 300, 20).build());
+
+        maxL1MessagesField = new TextFieldWidget(this.textRenderer, centerX + 55, 106, 75, 18, Text.literal("MaxL1"));
+        maxL1MessagesField.setMaxLength(6);
+        maxL1MessagesField.setText(String.valueOf(config.maxL1ContextMessages > 0 ? config.maxL1ContextMessages : 80));
+        this.addDrawableChild(maxL1MessagesField);
 
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal("§e📂 在资源管理器中打开配置与记忆文件夹"),
@@ -271,7 +275,7 @@ public class CompanionConfigScreen extends Screen {
                     if (configDir != null && configDir.exists()) {
                         Util.getOperatingSystem().open(configDir);
                     }
-                }).dimensions(centerX - 150, 168, 300, 20).build());
+                }).dimensions(centerX - 150, 182, 300, 20).build());
     }
 
     private void applyUiValuesToConfig(CompanionConfig config) {
@@ -293,6 +297,12 @@ public class CompanionConfigScreen extends Screen {
             if (idleChatField != null) {
                 try {
                     config.idleChatSeconds = Math.max(15, Integer.parseInt(idleChatField.getText().trim()));
+                } catch (NumberFormatException ignored) {}
+            }
+        } else if (currentTab == 3) {
+            if (maxL1MessagesField != null) {
+                try {
+                    config.maxL1ContextMessages = Math.max(20, Integer.parseInt(maxL1MessagesField.getText().trim()));
                 } catch (NumberFormatException ignored) {}
             }
         }
@@ -318,20 +328,20 @@ public class CompanionConfigScreen extends Screen {
             context.drawTextWithShadow(this.textRenderer, Text.literal("§7主动发言最小全局冷却 (秒):"), centerX - 150, 140, 0xCCCCCC);
             context.drawTextWithShadow(this.textRenderer, Text.literal("§7安静闲聊触发等待时长 (秒):"), centerX - 150, 166, 0xCCCCCC);
         } else if (currentTab == 3) {
+            context.drawTextWithShadow(this.textRenderer, Text.literal("§7L1 短期对话记忆条数上限 (溢出自动转存 L3):"), centerX - 150, 110, 0xCCCCCC);
             LocalMemoryManager memMgr = LocalMemoryManager.getCurrent();
             if (memMgr != null) {
                 LocalMemoryManager.CoreMemoryDoc doc = memMgr.getCoreMemory();
+                int l1Count = memMgr.getL1MessageCount();
+                int maxL1 = CompanionConfig.get().maxL1ContextMessages > 0 ? CompanionConfig.get().maxL1ContextMessages : 80;
                 context.drawCenteredTextWithShadow(this.textRenderer,
-                        Text.literal("§b【当前存档 L2 核心记忆档案统计】"), centerX, 116, 0xFFFFFF);
+                        Text.literal("§b【当前存档三层记忆库实时状态】"), centerX, 134, 0xFFFFFF);
                 context.drawCenteredTextWithShadow(this.textRenderer,
-                        Text.literal("§7已标记地标数: §a" + doc.landmarks.size() + " 处 §7│ 共同约定数: §a" + doc.activePromises.size() + " 项"),
-                        centerX, 132, 0xCCCCCC);
+                        Text.literal("§7L1 活跃对话: §a" + l1Count + "/" + maxL1 + " 条 §7│ L2 地标: §a" + doc.landmarks.size() + " 处 §7│ 约定: §a" + doc.activePromises.size() + " 项"),
+                        centerX, 149, 0xCCCCCC);
                 context.drawCenteredTextWithShadow(this.textRenderer,
                         Text.literal("§7最近互动记录: §f" + (doc.lastLogoutSummary.isEmpty() ? "初次探索中" : doc.lastLogoutSummary)),
-                        centerX, 148, 0xCCCCCC);
-            } else {
-                context.drawCenteredTextWithShadow(this.textRenderer,
-                        Text.literal("§7（进入单人或多人世界后即可查看当前存档的专属记忆统计）"), centerX, 132, 0xAAAAAA);
+                        centerX, 164, 0xCCCCCC);
             }
         }
 

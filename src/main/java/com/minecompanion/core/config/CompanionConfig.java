@@ -50,6 +50,7 @@ public class CompanionConfig {
 
     // ==================== 4. 长期记忆与模组百科 ====================
     public boolean enableLongTermMemory = true;
+    public int maxL1ContextMessages = 80;         // L1 短期记忆滑动窗口大小（默认 80 条 = 40 轮完整对话，溢出自动归档至 L3 日记）
     public boolean enableWikiLookup = true;
 
     public static CompanionConfig get() {
